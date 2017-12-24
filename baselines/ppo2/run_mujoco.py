@@ -44,7 +44,7 @@ def main():
     parser.add_argument('--log-dir', help='logdir for tensorboard', default=None)
     parser.add_argument('--output-format',
                         help='comma separated list of stdout|log|json|csv|tensorboard',
-                        default='tensorboard')
+                        default='tensorboard,stdout')
     args = parser.parse_args()
     logger.configure(dir=args.log_dir, format_strs=args.output_format.split(','))
     train(args.env, num_timesteps=args.num_timesteps, seed=args.seed)
