@@ -1,22 +1,24 @@
 import time
+
 import joblib
 import numpy as np
 import tensorflow as tf
+
 from baselines import logger
-
-from baselines.common import set_global_seeds
-
-from baselines.a2c.utils import batch_to_seq, seq_to_batch
-from baselines.a2c.utils import Scheduler, make_path, find_trainable_variables
-from baselines.a2c.utils import cat_entropy_softmax
 from baselines.a2c.utils import EpisodeStats
+from baselines.a2c.utils import Scheduler, make_path, find_trainable_variables
+from baselines.a2c.utils import batch_to_seq, seq_to_batch
+from baselines.a2c.utils import cat_entropy_softmax
 from baselines.a2c.utils import get_by_index, check_shape, avg_norm, gradient_add, q_explained_variance
 from baselines.acer.buffer import Buffer
+from baselines.common import set_global_seeds
+
 
 # remove last step
-def strip(var, nenvs, nsteps, flat = False):
+def strip(var, nenvs, nsteps, flat=False):
     vars = batch_to_seq(var, nenvs, nsteps + 1, flat)
     return seq_to_batch(vars[:-1], flat)
+
 
 def q_retrace(R, D, q_i, v, rho_i, nenvs, nsteps, gamma):
     """
@@ -46,6 +48,7 @@ def q_retrace(R, D, q_i, v, rho_i, nenvs, nsteps, gamma):
     qret = seq_to_batch(qrets, flat=True)
     return qret
 
+
 # For ACER with PPO clipping instead of trust region
 # def clip(ratio, eps_clip):
 #     # assume 0 <= eps_clip <= 1
@@ -63,10 +66,10 @@ class Model(object):
         nact = ac_space.n
         nbatch = nenvs * nsteps
 
-        A = tf.placeholder(tf.int32, [nbatch]) # actions
-        D = tf.placeholder(tf.float32, [nbatch]) # dones
-        R = tf.placeholder(tf.float32, [nbatch]) # rewards, not returns
-        MU = tf.placeholder(tf.float32, [nbatch, nact]) # mu's
+        A = tf.placeholder(tf.int32, [nbatch])  # actions
+        D = tf.placeholder(tf.float32, [nbatch])  # dones
+        R = tf.placeholder(tf.float32, [nbatch])  # rewards, not returns
+        MU = tf.placeholder(tf.float32, [nbatch, nact])  # mu's
         LR = tf.placeholder(tf.float32, [])
         eps = 1e-6
 
@@ -91,7 +94,7 @@ class Model(object):
             polyak_model = policy(sess, ob_space, ac_space, nenvs, nsteps + 1, nstack, reuse=True)
 
         # Notation: (var) = batch variable, (var)s = seqeuence variable, (var)_i = variable index by action at step i
-        v = tf.reduce_sum(train_model.pi * train_model.q, axis = -1) # shape is [nenvs * (nsteps + 1)]
+        v = tf.reduce_sum(train_model.pi * train_model.q, axis=-1)  # shape is [nenvs * (nsteps + 1)]
 
         # strip off last step
         f, f_pol, q = map(lambda var: strip(var, nenvs, nsteps), [train_model.pi, polyak_model.pi, train_model.q])
@@ -123,28 +126,30 @@ class Model(object):
 
         # Bias correction for the truncation
         adv_bc = (q - tf.reshape(v, [nenvs * nsteps, 1]))  # [nenvs * nsteps, nact]
-        logf_bc = tf.log(f + eps) # / (f_old + eps)
-        check_shape([adv_bc, logf_bc], [[nenvs * nsteps, nact]]*2)
-        gain_bc = tf.reduce_sum(logf_bc * tf.stop_gradient(adv_bc * tf.nn.relu(1.0 - (c / (rho + eps))) * f), axis = 1) #IMP: This is sum, as expectation wrt f
-        loss_bc= -tf.reduce_mean(gain_bc)
+        logf_bc = tf.log(f + eps)  # / (f_old + eps)
+        check_shape([adv_bc, logf_bc], [[nenvs * nsteps, nact]] * 2)
+        gain_bc = tf.reduce_sum(logf_bc * tf.stop_gradient(adv_bc * tf.nn.relu(1.0 - (c / (rho + eps))) * f),
+                                axis=1)  # IMP: This is sum, as expectation wrt f
+        loss_bc = -tf.reduce_mean(gain_bc)
 
         loss_policy = loss_f + loss_bc
 
         # Value/Q function loss, and explained variance
-        check_shape([qret, q_i], [[nenvs * nsteps]]*2)
+        check_shape([qret, q_i], [[nenvs * nsteps]] * 2)
         ev = q_explained_variance(tf.reshape(q_i, [nenvs, nsteps]), tf.reshape(qret, [nenvs, nsteps]))
-        loss_q = tf.reduce_mean(tf.square(tf.stop_gradient(qret) - q_i)*0.5)
+        loss_q = tf.reduce_mean(tf.square(tf.stop_gradient(qret) - q_i) * 0.5)
 
         # Net loss
         check_shape([loss_policy, loss_q, entropy], [[]] * 3)
         loss = loss_policy + q_coef * loss_q - ent_coef * entropy
 
         if trust_region:
-            g = tf.gradients(- (loss_policy - ent_coef * entropy) * nsteps * nenvs, f) #[nenvs * nsteps, nact]
+            g = tf.gradients(- (loss_policy - ent_coef * entropy) * nsteps * nenvs, f)  # [nenvs * nsteps, nact]
             # k = tf.gradients(KL(f_pol || f), f)
-            k = - f_pol / (f + eps) #[nenvs * nsteps, nact] # Directly computed gradient of KL divergence wrt f
+            k = - f_pol / (f + eps)  # [nenvs * nsteps, nact] # Directly computed gradient of KL divergence wrt f
             k_dot_g = tf.reduce_sum(k * g, axis=-1)
-            adj = tf.maximum(0.0, (tf.reduce_sum(k * g, axis=-1) - delta) / (tf.reduce_sum(tf.square(k), axis=-1) + eps)) #[nenvs * nsteps]
+            adj = tf.maximum(0.0, (tf.reduce_sum(k * g, axis=-1) - delta) / (
+            tf.reduce_sum(tf.square(k), axis=-1) + eps))  # [nenvs * nsteps]
 
             # Calculate stats (before doing adjustment) for logging.
             avg_norm_k = avg_norm(k)
@@ -153,7 +158,8 @@ class Model(object):
             avg_norm_adj = tf.reduce_mean(tf.abs(adj))
 
             g = g - tf.reshape(adj, [nenvs * nsteps, 1]) * k
-            grads_f = -g/(nenvs*nsteps) # These are turst region adjusted gradients wrt f ie statistics of policy pi
+            grads_f = -g / (
+            nenvs * nsteps)  # These are turst region adjusted gradients wrt f ie statistics of policy pi
             grads_policy = tf.gradients(f, params, grads_f)
             grads_q = tf.gradients(loss_q * q_coef, params)
             grads = [gradient_add(g1, g2, param) for (g1, g2, param) in zip(grads_policy, grads_q, params)]
@@ -181,9 +187,11 @@ class Model(object):
         names_ops = ['loss', 'loss_q', 'entropy', 'loss_policy', 'loss_f', 'loss_bc', 'explained_variance',
                      'norm_grads']
         if trust_region:
-            run_ops = run_ops + [norm_grads_q, norm_grads_policy, avg_norm_grads_f, avg_norm_k, avg_norm_g, avg_norm_k_dot_g,
+            run_ops = run_ops + [norm_grads_q, norm_grads_policy, avg_norm_grads_f, avg_norm_k, avg_norm_g,
+                                 avg_norm_k_dot_g,
                                  avg_norm_adj]
-            names_ops = names_ops + ['norm_grads_q', 'norm_grads_policy', 'avg_norm_grads_f', 'avg_norm_k', 'avg_norm_g',
+            names_ops = names_ops + ['norm_grads_q', 'norm_grads_policy', 'avg_norm_grads_f', 'avg_norm_k',
+                                     'avg_norm_g',
                                      'avg_norm_k_dot_g', 'avg_norm_adj']
 
         def train(obs, actions, rewards, dones, mus, states, masks, steps):
@@ -209,6 +217,7 @@ class Model(object):
         self.initial_state = step_model.initial_state
         tf.global_variables_initializer().run(session=sess)
 
+
 class Runner(object):
     def __init__(self, env, model, nsteps, nstack):
         self.env = env
@@ -219,7 +228,7 @@ class Runner(object):
         self.nenv = nenv = env.num_envs
         self.nact = env.action_space.n
         self.nbatch = nenv * nsteps
-        self.batch_ob_shape = (nenv*(nsteps+1), nh, nw, nc*nstack)
+        self.batch_ob_shape = (nenv * (nsteps + 1), nh, nw, nc * nstack)
         self.obs = np.zeros((nenv, nh, nw, nc * nstack), dtype=np.uint8)
         obs = env.reset()
         self.update_obs(obs)
@@ -260,13 +269,14 @@ class Runner(object):
 
         mb_dones = np.asarray(mb_dones, dtype=np.bool).swapaxes(1, 0)
 
-        mb_masks = mb_dones # Used for statefull models like LSTM's to mask state when done
-        mb_dones = mb_dones[:, 1:] # Used for calculating returns. The dones array is now aligned with rewards
+        mb_masks = mb_dones  # Used for statefull models like LSTM's to mask state when done
+        mb_dones = mb_dones[:, 1:]  # Used for calculating returns. The dones array is now aligned with rewards
 
         # shapes are now [nenv, nsteps, []]
         # When pulling from buffer, arrays will now be reshaped in place, preventing a deep copy.
 
         return enc_obs, mb_obs, mb_actions, mb_rewards, mb_mus, mb_dones, mb_masks
+
 
 class Acer():
     def __init__(self, runner, model, buffer, log_interval):
@@ -299,9 +309,9 @@ class Acer():
 
         names_ops, values_ops = model.train(obs, actions, rewards, dones, mus, model.initial_state, masks, steps)
 
-        if on_policy and (int(steps/runner.nbatch) % self.log_interval == 0):
+        if on_policy and (int(steps / runner.nbatch) % self.log_interval == 0):
             logger.record_tabular("total_timesteps", steps)
-            logger.record_tabular("fps", int(steps/(time.time() - self.tstart)))
+            logger.record_tabular("fps", int(steps / (time.time() - self.tstart)))
             # IMP: In EpisodicLife env, during training, we get done=True at each loss of life, not just at the terminal state.
             # Thus, this is mean until end of life, not end of episode.
             # For true episode rewards, see the monitor files in the log folder.
@@ -324,7 +334,7 @@ def learn(policy, env, seed, nsteps=20, nstack=4, total_timesteps=int(80e6), q_c
     nenvs = env.num_envs
     ob_space = env.observation_space
     ac_space = env.action_space
-    num_procs = len(env.remotes) # HACK
+    num_procs = len(env.remotes)  # HACK
     model = Model(policy=policy, ob_space=ob_space, ac_space=ac_space, nenvs=nenvs, nsteps=nsteps, nstack=nstack,
                   num_procs=num_procs, ent_coef=ent_coef, q_coef=q_coef, gamma=gamma,
                   max_grad_norm=max_grad_norm, lr=lr, rprop_alpha=rprop_alpha, rprop_epsilon=rprop_epsilon,
@@ -336,10 +346,11 @@ def learn(policy, env, seed, nsteps=20, nstack=4, total_timesteps=int(80e6), q_c
         buffer = Buffer(env=env, nsteps=nsteps, nstack=nstack, size=buffer_size)
     else:
         buffer = None
-    nbatch = nenvs*nsteps
+    nbatch = nenvs * nsteps
     acer = Acer(runner, model, buffer, log_interval)
     acer.tstart = time.time()
-    for acer.steps in range(0, total_timesteps, nbatch): #nbatch samples, 1 on_policy call and multiple off-policy calls
+    for acer.steps in range(0, total_timesteps,
+                            nbatch):  # nbatch samples, 1 on_policy call and multiple off-policy calls
         acer.call(on_policy=True)
         if replay_ratio > 0 and buffer.has_atleast(replay_start):
             n = np.random.poisson(replay_ratio)

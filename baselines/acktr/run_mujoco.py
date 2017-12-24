@@ -2,17 +2,20 @@
 import argparse
 import logging
 import os
-import tensorflow as tf
+
 import gym
-from baselines import logger
-from baselines.common import set_global_seeds
+import tensorflow as tf
+
 from baselines import bench
+from baselines import logger
 from baselines.acktr.acktr_cont import learn
 from baselines.acktr.policies import GaussianMlpPolicy
 from baselines.acktr.value_functions import NeuralNetValueFunction
+from baselines.common import set_global_seeds
+
 
 def train(env_id, num_timesteps, seed):
-    env=gym.make(env_id)
+    env = gym.make(env_id)
     env = bench.Monitor(env, logger.get_dir() and os.path.join(logger.get_dir(), str(rank)))
     set_global_seeds(seed)
     env.seed(seed)
@@ -27,11 +30,12 @@ def train(env_id, num_timesteps, seed):
             policy = GaussianMlpPolicy(ob_dim, ac_dim)
 
         learn(env, policy=policy, vf=vf,
-            gamma=0.99, lam=0.97, timesteps_per_batch=2500,
-            desired_kl=0.002,
-            num_timesteps=num_timesteps, animate=False)
+              gamma=0.99, lam=0.97, timesteps_per_batch=2500,
+              desired_kl=0.002,
+              num_timesteps=num_timesteps, animate=False)
 
         env.close()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run Mujoco benchmark.')

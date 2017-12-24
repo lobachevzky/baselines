@@ -1,5 +1,3 @@
-import os.path as osp
-
 _atari7 = ['BeamRider', 'Breakout', 'Enduro', 'Pong', 'Qbert', 'Seaquest', 'SpaceInvaders']
 _atariexpl7 = ['Freeway', 'Gravitar', 'MontezumaRevenge', 'Pitfall', 'PrivateEye', 'Solaris', 'Venture']
 
@@ -62,9 +60,6 @@ register_benchmark({
     'description': '7 Atari games emphasizing exploration, with pixel observations, 10M timesteps',
     'tasks': [{'env_id': _game + _ATARI_SUFFIX, 'trials': 2, 'num_timesteps': int(10e6)} for _game in _atariexpl7]
 })
-
-
-
 
 # MuJoCo
 

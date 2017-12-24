@@ -1,5 +1,6 @@
 import numpy as np
 
+
 class Buffer(object):
     # gets obs, actions, rewards, mu's, (states, masks), dones
     def __init__(self, env, nsteps, nstack, size=50000):
@@ -8,7 +9,8 @@ class Buffer(object):
         self.nh, self.nw, self.nc = env.observation_space.shape
         self.nstack = nstack
         self.nbatch = self.nenv * self.nsteps
-        self.size = size // (self.nsteps)  # Each loc contains nenv * nsteps frames, thus total buffer is nenv * size frames
+        self.size = size // (
+        self.nsteps)  # Each loc contains nenv * nsteps frames, thus total buffer is nenv * size frames
 
         # Memory
         self.enc_obs = None

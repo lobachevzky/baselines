@@ -1,7 +1,9 @@
-from mpi4py import MPI
-import baselines.common.tf_util as U
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
+from mpi4py import MPI
+
+import baselines.common.tf_util as U
+
 
 class MpiAdam(object):
     def __init__(self, var_list, *, beta1=0.9, beta2=0.999, epsilon=1e-08, scale_grad_by_procs=True, comm=None):
@@ -28,7 +30,7 @@ class MpiAdam(object):
             globalg /= self.comm.Get_size()
 
         self.t += 1
-        a = stepsize * np.sqrt(1 - self.beta2**self.t)/(1 - self.beta1**self.t)
+        a = stepsize * np.sqrt(1 - self.beta2 ** self.t) / (1 - self.beta1 ** self.t)
         self.m = self.beta1 * self.m + (1 - self.beta1) * globalg
         self.v = self.beta2 * self.v + (1 - self.beta2) * (globalg * globalg)
         step = (- a) * self.m / (np.sqrt(self.v) + self.epsilon)
@@ -40,7 +42,7 @@ class MpiAdam(object):
         self.setfromflat(theta)
 
     def check_synced(self):
-        if self.comm.Get_rank() == 0: # this is root
+        if self.comm.Get_rank() == 0:  # this is root
             theta = self.getflat()
             self.comm.Bcast(theta, root=0)
         else:
@@ -49,13 +51,14 @@ class MpiAdam(object):
             self.comm.Bcast(thetaroot, root=0)
             assert (thetaroot == thetalocal).all(), (thetaroot, thetalocal)
 
+
 @U.in_session
 def test_MpiAdam():
     np.random.seed(0)
     tf.set_random_seed(0)
-    
+
     a = tf.Variable(np.random.randn(3).astype('float32'))
-    b = tf.Variable(np.random.randn(2,5).astype('float32'))
+    b = tf.Variable(np.random.randn(2, 5).astype('float32'))
     loss = tf.reduce_sum(tf.square(a)) + tf.reduce_sum(tf.sin(b))
 
     stepsize = 1e-2
@@ -64,16 +67,16 @@ def test_MpiAdam():
 
     tf.get_default_session().run(tf.global_variables_initializer())
     for i in range(10):
-        print(i,do_update())
+        print(i, do_update())
 
     tf.set_random_seed(0)
     tf.get_default_session().run(tf.global_variables_initializer())
 
-    var_list = [a,b]
+    var_list = [a, b]
     lossandgrad = U.function([], [loss, U.flatgrad(loss, var_list)], updates=[update_op])
     adam = MpiAdam(var_list)
 
     for i in range(10):
-        l,g = lossandgrad()
+        l, g = lossandgrad()
         adam.update(g, stepsize)
-        print(i,l)
+        print(i, l)

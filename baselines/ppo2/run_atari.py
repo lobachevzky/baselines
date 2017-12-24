@@ -1,7 +1,9 @@
 #!/usr/bin/env python
-import sys
 import argparse
+import sys
+
 from baselines import bench, logger
+
 
 def train(env_id, num_timesteps, seed, policy):
     from baselines.common import set_global_seeds
@@ -20,7 +22,7 @@ def train(env_id, num_timesteps, seed, policy):
     config = tf.ConfigProto(allow_soft_placement=True,
                             intra_op_parallelism_threads=ncpu,
                             inter_op_parallelism_threads=ncpu)
-    config.gpu_options.allow_growth = True #pylint: disable=E1101
+    config.gpu_options.allow_growth = True  # pylint: disable=E1101
     gym.logger.setLevel(logging.WARN)
     tf.Session(config=config).__enter__()
 
@@ -30,18 +32,21 @@ def train(env_id, num_timesteps, seed, policy):
             env.seed(seed + rank)
             env = bench.Monitor(env, logger.get_dir() and osp.join(logger.get_dir(), str(rank)))
             return wrap_deepmind(env)
+
         return env_fn
+
     nenvs = 8
     env = SubprocVecEnv([make_env(i) for i in range(nenvs)])
     set_global_seeds(seed)
     env = VecFrameStack(env, 4)
-    policy = {'cnn' : CnnPolicy, 'lstm' : LstmPolicy, 'lnlstm' : LnLstmPolicy}[policy]
+    policy = {'cnn': CnnPolicy, 'lstm': LstmPolicy, 'lnlstm': LnLstmPolicy}[policy]
     ppo2.learn(policy=policy, env=env, nsteps=128, nminibatches=4,
-        lam=0.95, gamma=0.99, noptepochs=4, log_interval=1,
-        ent_coef=.01,
-        lr=lambda f : f * 2.5e-4,
-        cliprange=lambda f : f * 0.1,
-        total_timesteps=int(num_timesteps * 1.1))
+               lam=0.95, gamma=0.99, noptepochs=4, log_interval=1,
+               ent_coef=.01,
+               lr=lambda f: f * 2.5e-4,
+               cliprange=lambda f: f * 0.1,
+               total_timesteps=int(num_timesteps * 1.1))
+
 
 def main():
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -56,7 +61,8 @@ def main():
     args = parser.parse_args()
     logger.configure(dir=args.log_dir, format_strs=args.output_format.split(','))
     train(args.env, num_timesteps=args.num_timesteps, seed=args.seed,
-        policy=args.policy)
+          policy=args.policy)
+
 
 if __name__ == '__main__':
     main()

@@ -1,10 +1,11 @@
-import gym
-import numpy as np
 import os
 import pickle
 import random
 import tempfile
 import zipfile
+
+import gym
+import numpy as np
 
 
 def zipsame(*seqs):
@@ -151,6 +152,7 @@ class RunningAvg(object):
     def __float__(self):
         """Get the current estimate"""
         return self._value
+
 
 def boolean_flag(parser, name, default=False, help=None):
     """Add a boolean flag to argparse parser.

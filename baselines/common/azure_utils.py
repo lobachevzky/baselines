@@ -3,12 +3,14 @@ import tempfile
 import zipfile
 
 from azure.common import AzureMissingResourceHttpError
+
 try:
     from azure.storage.blob import BlobService
 except ImportError:
     from azure.storage.blob import BlockBlobService as BlobService
 from shutil import unpack_archive
 from threading import Event
+
 
 # TODOS: use Azure snapshots instead of hacky backups
 

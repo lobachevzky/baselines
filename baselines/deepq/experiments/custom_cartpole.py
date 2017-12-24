@@ -1,15 +1,15 @@
-import gym
 import itertools
+
+import gym
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 
 import baselines.common.tf_util as U
-
-from baselines import logger
 from baselines import deepq
-from baselines.deepq.replay_buffer import ReplayBuffer
+from baselines import logger
 from baselines.common.schedules import LinearSchedule
+from baselines.deepq.replay_buffer import ReplayBuffer
 
 
 def model(inpt, num_actions, scope, reuse=False):

@@ -1,10 +1,10 @@
 import numpy as np
 import tensorflow as tf
-from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm, sample, check_shape
+
+from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, sample
 
 
 class AcerCnnPolicy(object):
-
     def __init__(self, sess, ob_space, ac_space, nenv, nsteps, nstack, reuse=False):
         nbatch = nenv * nsteps
         nh, nw, nc = ob_space.shape
@@ -43,16 +43,16 @@ class AcerCnnPolicy(object):
         self.out = out
         self.act = act
 
-class AcerLstmPolicy(object):
 
+class AcerLstmPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nenv, nsteps, nstack, reuse=False, nlstm=256):
         nbatch = nenv * nsteps
         nh, nw, nc = ob_space.shape
         ob_shape = (nbatch, nh, nw, nc * nstack)
         nact = ac_space.n
         X = tf.placeholder(tf.uint8, ob_shape)  # obs
-        M = tf.placeholder(tf.float32, [nbatch]) #mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, nlstm*2]) #states
+        M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
+        S = tf.placeholder(tf.float32, [nenv, nlstm * 2])  # states
         with tf.variable_scope("model", reuse=reuse):
             h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
             h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
@@ -71,7 +71,7 @@ class AcerLstmPolicy(object):
             q = fc(h5, 'q', nact, act=lambda x: x)
 
         a = sample(pi_logits)  # could change this to use self.pi instead
-        self.initial_state = np.zeros((nenv, nlstm*2), dtype=np.float32)
+        self.initial_state = np.zeros((nenv, nlstm * 2), dtype=np.float32)
         self.X = X
         self.M = M
         self.S = S

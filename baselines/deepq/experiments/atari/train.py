@@ -1,17 +1,19 @@
 import argparse
-import gym
-import numpy as np
+import json
 import os
-import tensorflow as tf
 import tempfile
 import time
-import json
+
+import gym
+import numpy as np
+import tensorflow as tf
+from baselines.common.atari_wrappers_deprecated import wrap_dqn
 
 import baselines.common.tf_util as U
-
-from baselines import logger
+from baselines import bench
 from baselines import deepq
-from baselines.deepq.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
+from baselines import logger
+from baselines.common.azure_utils import Container
 from baselines.common.misc_util import (
     boolean_flag,
     pickle_load,
@@ -21,9 +23,7 @@ from baselines.common.misc_util import (
     RunningAvg,
 )
 from baselines.common.schedules import LinearSchedule, PiecewiseSchedule
-from baselines import bench
-from baselines.common.atari_wrappers_deprecated import wrap_dqn
-from baselines.common.azure_utils import Container
+from baselines.deepq.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer
 from .model import model, dueling_model
 
 
@@ -35,35 +35,51 @@ def parse_args():
     # Core DQN parameters
     parser.add_argument("--replay-buffer-size", type=int, default=int(1e6), help="replay buffer size")
     parser.add_argument("--lr", type=float, default=1e-4, help="learning rate for Adam optimizer")
-    parser.add_argument("--num-steps", type=int, default=int(2e8), help="total number of steps to run the environment for")
+    parser.add_argument("--num-steps", type=int, default=int(2e8),
+                        help="total number of steps to run the environment for")
     parser.add_argument("--batch-size", type=int, default=32, help="number of transitions to optimize at the same time")
-    parser.add_argument("--learning-freq", type=int, default=4, help="number of iterations between every optimization step")
-    parser.add_argument("--target-update-freq", type=int, default=40000, help="number of iterations between every target network update")
-    parser.add_argument("--param-noise-update-freq", type=int, default=50, help="number of iterations between every re-scaling of the parameter noise")
-    parser.add_argument("--param-noise-reset-freq", type=int, default=10000, help="maximum number of steps to take per episode before re-perturbing the exploration policy")
+    parser.add_argument("--learning-freq", type=int, default=4,
+                        help="number of iterations between every optimization step")
+    parser.add_argument("--target-update-freq", type=int, default=40000,
+                        help="number of iterations between every target network update")
+    parser.add_argument("--param-noise-update-freq", type=int, default=50,
+                        help="number of iterations between every re-scaling of the parameter noise")
+    parser.add_argument("--param-noise-reset-freq", type=int, default=10000,
+                        help="maximum number of steps to take per episode before re-perturbing the exploration policy")
     # Bells and whistles
     boolean_flag(parser, "double-q", default=True, help="whether or not to use double q learning")
     boolean_flag(parser, "dueling", default=False, help="whether or not to use dueling model")
     boolean_flag(parser, "prioritized", default=False, help="whether or not to use prioritized replay buffer")
-    boolean_flag(parser, "param-noise", default=False, help="whether or not to use parameter space noise for exploration")
-    boolean_flag(parser, "layer-norm", default=False, help="whether or not to use layer norm (should be True if param_noise is used)")
-    boolean_flag(parser, "gym-monitor", default=False, help="whether or not to use a OpenAI Gym monitor (results in slower training due to video recording)")
-    parser.add_argument("--prioritized-alpha", type=float, default=0.6, help="alpha parameter for prioritized replay buffer")
-    parser.add_argument("--prioritized-beta0", type=float, default=0.4, help="initial value of beta parameters for prioritized replay")
-    parser.add_argument("--prioritized-eps", type=float, default=1e-6, help="eps parameter for prioritized replay buffer")
+    boolean_flag(parser, "param-noise", default=False,
+                 help="whether or not to use parameter space noise for exploration")
+    boolean_flag(parser, "layer-norm", default=False,
+                 help="whether or not to use layer norm (should be True if param_noise is used)")
+    boolean_flag(parser, "gym-monitor", default=False,
+                 help="whether or not to use a OpenAI Gym monitor (results in slower training due to video recording)")
+    parser.add_argument("--prioritized-alpha", type=float, default=0.6,
+                        help="alpha parameter for prioritized replay buffer")
+    parser.add_argument("--prioritized-beta0", type=float, default=0.4,
+                        help="initial value of beta parameters for prioritized replay")
+    parser.add_argument("--prioritized-eps", type=float, default=1e-6,
+                        help="eps parameter for prioritized replay buffer")
     # Checkpointing
-    parser.add_argument("--save-dir", type=str, default=None, help="directory in which training state and model should be saved.")
+    parser.add_argument("--save-dir", type=str, default=None,
+                        help="directory in which training state and model should be saved.")
     parser.add_argument("--save-azure-container", type=str, default=None,
                         help="It present data will saved/loaded from Azure. Should be in format ACCOUNT_NAME:ACCOUNT_KEY:CONTAINER")
-    parser.add_argument("--save-freq", type=int, default=1e6, help="save model once every time this many iterations are completed")
-    boolean_flag(parser, "load-on-start", default=True, help="if true and model was previously saved then training will be resumed")
+    parser.add_argument("--save-freq", type=int, default=1e6,
+                        help="save model once every time this many iterations are completed")
+    boolean_flag(parser, "load-on-start", default=True,
+                 help="if true and model was previously saved then training will be resumed")
     return parser.parse_args()
 
 
 def make_env(game_name):
     env = gym.make(game_name + "NoFrameskip-v4")
-    monitored_env = bench.Monitor(env, logger.get_dir())  # puts rewards and number of steps in info, before environment is wrapped
-    env = wrap_dqn(monitored_env)  # applies a bunch of modification to simplify the observation space (downsample, make b/w)
+    monitored_env = bench.Monitor(env,
+                                  logger.get_dir())  # puts rewards and number of steps in info, before environment is wrapped
+    env = wrap_dqn(
+        monitored_env)  # applies a bunch of modification to simplify the observation space (downsample, make b/w)
     return env, monitored_env
 
 
@@ -108,7 +124,7 @@ def maybe_load_model(savedir, container):
 
 if __name__ == '__main__':
     args = parse_args()
-    
+
     # Parse savedir and azure container.
     savedir = args.save_dir
     if savedir is None:
@@ -142,6 +158,8 @@ if __name__ == '__main__':
         def model_wrapper(img_in, num_actions, scope, **kwargs):
             actual_model = dueling_model if args.dueling else model
             return actual_model(img_in, num_actions, scope, layer_norm=args.layer_norm, **kwargs)
+
+
         act, train, update_target, debug = deepq.build_train(
             make_obs_ph=lambda name: U.Uint8Input(env.observation_space.shape, name=name),
             q_func=model_wrapper,
@@ -203,7 +221,8 @@ if __name__ == '__main__':
                 # policy is comparable to eps-greedy exploration with eps = exploration.value(t).
                 # See Appendix C.1 in Parameter Space Noise for Exploration, Plappert et al., 2017
                 # for detailed explanation.
-                update_param_noise_threshold = -np.log(1. - exploration.value(num_iters) + exploration.value(num_iters) / float(env.action_space.n))
+                update_param_noise_threshold = -np.log(
+                    1. - exploration.value(num_iters) + exploration.value(num_iters) / float(env.action_space.n))
                 kwargs['reset'] = reset
                 kwargs['update_param_noise_threshold'] = update_param_noise_threshold
                 kwargs['update_param_noise_scale'] = (num_iters % args.param_noise_update_freq == 0)
@@ -219,7 +238,7 @@ if __name__ == '__main__':
                 reset = True
 
             if (num_iters > max(5 * args.batch_size, args.replay_buffer_size // 20) and
-                    num_iters % args.learning_freq == 0):
+                            num_iters % args.learning_freq == 0):
                 # Sample a bunch of transitions from replay buffer
                 if args.prioritized:
                     experience = replay_buffer.sample(args.batch_size, beta=beta_schedule.value(num_iters))

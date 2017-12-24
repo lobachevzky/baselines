@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 import argparse
+
 from baselines import bench, logger
+
 
 def train(env_id, num_timesteps, seed):
     from baselines.common import set_global_seeds
@@ -15,21 +17,23 @@ def train(env_id, num_timesteps, seed):
                             intra_op_parallelism_threads=ncpu,
                             inter_op_parallelism_threads=ncpu)
     tf.Session(config=config).__enter__()
+
     def make_env():
         env = gym.make(env_id)
         env = bench.Monitor(env, logger.get_dir())
         return env
+
     env = DummyVecEnv([make_env])
     env = VecNormalize(env)
 
     set_global_seeds(seed)
     policy = MlpPolicy
     ppo2.learn(policy=policy, env=env, nsteps=2048, nminibatches=32,
-        lam=0.95, gamma=0.99, noptepochs=10, log_interval=1,
-        ent_coef=0.0,
-        lr=3e-4,
-        cliprange=0.2,
-        total_timesteps=num_timesteps)
+               lam=0.95, gamma=0.99, noptepochs=10, log_interval=1,
+               ent_coef=0.0,
+               lr=3e-4,
+               cliprange=0.2,
+               total_timesteps=num_timesteps)
 
 
 def main():
@@ -44,4 +48,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

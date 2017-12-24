@@ -1,14 +1,18 @@
-from baselines.common import explained_variance, zipsame, dataset
-from baselines import logger
-import baselines.common.tf_util as U
-import tensorflow as tf, numpy as np
 import time
-from baselines.common import colorize
-from mpi4py import MPI
 from collections import deque
-from baselines.common.mpi_adam import MpiAdam
-from baselines.common.cg import cg
 from contextlib import contextmanager
+
+import numpy as np
+import tensorflow as tf
+from mpi4py import MPI
+
+import baselines.common.tf_util as U
+from baselines import logger
+from baselines.common import colorize
+from baselines.common import explained_variance, zipsame, dataset
+from baselines.common.cg import cg
+from baselines.common.mpi_adam import MpiAdam
+
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     # Initialize state variables
@@ -38,10 +42,10 @@ def traj_segment_generator(pi, env, horizon, stochastic):
         # before returning segment [0, T-1] so we get the correct
         # terminal value
         if t > 0 and t % horizon == 0:
-            yield {"ob" : obs, "rew" : rews, "vpred" : vpreds, "new" : news,
-                    "ac" : acs, "prevac" : prevacs, "nextvpred": vpred * (1 - new),
-                    "ep_rets" : ep_rets, "ep_lens" : ep_lens}
-            _, vpred = pi.act(stochastic, ob)            
+            yield {"ob": obs, "rew": rews, "vpred": vpreds, "new": news,
+                   "ac": acs, "prevac": prevacs, "nextvpred": vpred * (1 - new),
+                   "ep_rets": ep_rets, "ep_lens": ep_lens}
+            _, vpred = pi.act(stochastic, ob)
             # Be careful!!! if you change the downstream algorithm to aggregate
             # several of these batches, then be sure to do a deepcopy
             ep_rets = []
@@ -66,41 +70,43 @@ def traj_segment_generator(pi, env, horizon, stochastic):
             ob = env.reset()
         t += 1
 
+
 def add_vtarg_and_adv(seg, gamma, lam):
-    new = np.append(seg["new"], 0) # last element is only used for last vtarg, but we already zeroed it if last new = 1
+    new = np.append(seg["new"], 0)  # last element is only used for last vtarg, but we already zeroed it if last new = 1
     vpred = np.append(seg["vpred"], seg["nextvpred"])
     T = len(seg["rew"])
     seg["adv"] = gaelam = np.empty(T, 'float32')
     rew = seg["rew"]
     lastgaelam = 0
     for t in reversed(range(T)):
-        nonterminal = 1-new[t+1]
-        delta = rew[t] + gamma * vpred[t+1] * nonterminal - vpred[t]
+        nonterminal = 1 - new[t + 1]
+        delta = rew[t] + gamma * vpred[t + 1] * nonterminal - vpred[t]
         gaelam[t] = lastgaelam = delta + gamma * lam * nonterminal * lastgaelam
     seg["tdlamret"] = seg["adv"] + seg["vpred"]
 
+
 def learn(env, policy_func, *,
-        timesteps_per_batch, # what to train on
-        max_kl, cg_iters,
-        gamma, lam, # advantage estimation
-        entcoeff=0.0,
-        cg_damping=1e-2,
-        vf_stepsize=3e-4,
-        vf_iters =3,
-        max_timesteps=0, max_episodes=0, max_iters=0,  # time constraint
-        callback=None
-        ):
+          timesteps_per_batch,  # what to train on
+          max_kl, cg_iters,
+          gamma, lam,  # advantage estimation
+          entcoeff=0.0,
+          cg_damping=1e-2,
+          vf_stepsize=3e-4,
+          vf_iters=3,
+          max_timesteps=0, max_episodes=0, max_iters=0,  # time constraint
+          callback=None
+          ):
     nworkers = MPI.COMM_WORLD.Get_size()
     rank = MPI.COMM_WORLD.Get_rank()
-    np.set_printoptions(precision=3)    
+    np.set_printoptions(precision=3)
     # Setup losses and stuff
     # ----------------------------------------
     ob_space = env.observation_space
     ac_space = env.action_space
     pi = policy_func("pi", ob_space, ac_space)
     oldpi = policy_func("oldpi", ob_space, ac_space)
-    atarg = tf.placeholder(dtype=tf.float32, shape=[None]) # Target advantage function (if applicable)
-    ret = tf.placeholder(dtype=tf.float32, shape=[None]) # Empirical return
+    atarg = tf.placeholder(dtype=tf.float32, shape=[None])  # Target advantage function (if applicable)
+    ret = tf.placeholder(dtype=tf.float32, shape=[None])  # Empirical return
 
     ob = U.get_placeholder_cached(name="ob")
     ac = pi.pdtype.sample_placeholder([None])
@@ -113,7 +119,7 @@ def learn(env, policy_func, *,
 
     vferr = U.mean(tf.square(pi.vpred - ret))
 
-    ratio = tf.exp(pi.pd.logp(ac) - oldpi.pd.logp(ac)) # advantage * pnew / pold
+    ratio = tf.exp(pi.pd.logp(ac) - oldpi.pd.logp(ac))  # advantage * pnew / pold
     surrgain = U.mean(ratio * atarg)
 
     optimgain = surrgain + entbonus
@@ -136,13 +142,14 @@ def learn(env, policy_func, *,
     tangents = []
     for shape in shapes:
         sz = U.intprod(shape)
-        tangents.append(tf.reshape(flat_tangent[start:start+sz], shape))
+        tangents.append(tf.reshape(flat_tangent[start:start + sz], shape))
         start += sz
-    gvp = tf.add_n([U.sum(g*tangent) for (g, tangent) in zipsame(klgrads, tangents)]) #pylint: disable=E1111
+    gvp = tf.add_n([U.sum(g * tangent) for (g, tangent) in zipsame(klgrads, tangents)])  # pylint: disable=E1111
     fvp = U.flatgrad(gvp, var_list)
 
-    assign_old_eq_new = U.function([],[], updates=[tf.assign(oldv, newv)
-        for (oldv, newv) in zipsame(oldpi.get_variables(), pi.get_variables())])
+    assign_old_eq_new = U.function([], [], updates=[tf.assign(oldv, newv)
+                                                    for (oldv, newv) in
+                                                    zipsame(oldpi.get_variables(), pi.get_variables())])
     compute_losses = U.function([ob, ac, atarg], losses)
     compute_lossandgrad = U.function([ob, ac, atarg], losses + [U.flatgrad(optimgain, var_list)])
     compute_fvp = U.function([flat_tangent, ob, ac, atarg], fvp)
@@ -154,10 +161,10 @@ def learn(env, policy_func, *,
             print(colorize(msg, color='magenta'))
             tstart = time.time()
             yield
-            print(colorize("done in %.3f seconds"%(time.time() - tstart), color='magenta'))
+            print(colorize("done in %.3f seconds" % (time.time() - tstart), color='magenta'))
         else:
             yield
-    
+
     def allmean(x):
         assert isinstance(x, np.ndarray)
         out = np.empty_like(x)
@@ -180,12 +187,12 @@ def learn(env, policy_func, *,
     timesteps_so_far = 0
     iters_so_far = 0
     tstart = time.time()
-    lenbuffer = deque(maxlen=40) # rolling buffer for episode lengths
-    rewbuffer = deque(maxlen=40) # rolling buffer for episode rewards
+    lenbuffer = deque(maxlen=40)  # rolling buffer for episode lengths
+    rewbuffer = deque(maxlen=40)  # rolling buffer for episode rewards
 
-    assert sum([max_iters>0, max_timesteps>0, max_episodes>0])==1
+    assert sum([max_iters > 0, max_timesteps > 0, max_episodes > 0]) == 1
 
-    while True:        
+    while True:
         if callback: callback(locals(), globals())
         if max_timesteps and timesteps_so_far >= max_timesteps:
             break
@@ -193,7 +200,7 @@ def learn(env, policy_func, *,
             break
         elif max_iters and iters_so_far >= max_iters:
             break
-        logger.log("********** Iteration %i ************"%iters_so_far)
+        logger.log("********** Iteration %i ************" % iters_so_far)
 
         with timed("sampling"):
             seg = seg_gen.__next__()
@@ -201,18 +208,19 @@ def learn(env, policy_func, *,
 
         # ob, ac, atarg, ret, td1ret = map(np.concatenate, (obs, acs, atargs, rets, td1rets))
         ob, ac, atarg, tdlamret = seg["ob"], seg["ac"], seg["adv"], seg["tdlamret"]
-        vpredbefore = seg["vpred"] # predicted value function before udpate
-        atarg = (atarg - atarg.mean()) / atarg.std() # standardized advantage function estimate
+        vpredbefore = seg["vpred"]  # predicted value function before udpate
+        atarg = (atarg - atarg.mean()) / atarg.std()  # standardized advantage function estimate
 
         if hasattr(pi, "ret_rms"): pi.ret_rms.update(tdlamret)
-        if hasattr(pi, "ob_rms"): pi.ob_rms.update(ob) # update running mean/std for policy
+        if hasattr(pi, "ob_rms"): pi.ob_rms.update(ob)  # update running mean/std for policy
 
         args = seg["ob"], seg["ac"], atarg
         fvpargs = [arr[::5] for arr in args]
+
         def fisher_vector_product(p):
             return allmean(compute_fvp(p, *fvpargs)) + cg_damping * p
 
-        assign_old_eq_new() # set old parameter values to new parameter values
+        assign_old_eq_new()  # set old parameter values to new parameter values
         with timed("computegrad"):
             *lossbefore, g = compute_lossandgrad(*args)
         lossbefore = allmean(np.array(lossbefore))
@@ -221,9 +229,9 @@ def learn(env, policy_func, *,
             logger.log("Got zero gradient. not updating")
         else:
             with timed("cg"):
-                stepdir = cg(fisher_vector_product, g, cg_iters=cg_iters, verbose=rank==0)
+                stepdir = cg(fisher_vector_product, g, cg_iters=cg_iters, verbose=rank == 0)
             assert np.isfinite(stepdir).all()
-            shs = .5*stepdir.dot(fisher_vector_product(stepdir))
+            shs = .5 * stepdir.dot(fisher_vector_product(stepdir))
             lm = np.sqrt(shs / max_kl)
             # logger.log("lagrange multiplier:", lm, "gnorm:", np.linalg.norm(g))
             fullstep = stepdir / lm
@@ -236,7 +244,7 @@ def learn(env, policy_func, *,
                 set_from_flat(thnew)
                 meanlosses = surr, kl, *_ = allmean(np.array(compute_losses(*args)))
                 improve = surr - surrbefore
-                logger.log("Expected: %.3f Actual: %.3f"%(expectedimprove, improve))
+                logger.log("Expected: %.3f Actual: %.3f" % (expectedimprove, improve))
                 if not np.isfinite(meanlosses).all():
                     logger.log("Got non-finite value of losses -- bad!")
                 elif kl > max_kl * 1.5:
@@ -251,7 +259,7 @@ def learn(env, policy_func, *,
                 logger.log("couldn't compute a good step")
                 set_from_flat(thbefore)
             if nworkers > 1 and iters_so_far % 20 == 0:
-                paramsums = MPI.COMM_WORLD.allgather((thnew.sum(), vfadam.getflat().sum())) # list of tuples
+                paramsums = MPI.COMM_WORLD.allgather((thnew.sum(), vfadam.getflat().sum()))  # list of tuples
                 assert all(np.allclose(ps, paramsums[0]) for ps in paramsums[1:])
 
         for (lossname, lossval) in zip(loss_names, meanlosses):
@@ -260,15 +268,15 @@ def learn(env, policy_func, *,
         with timed("vf"):
 
             for _ in range(vf_iters):
-                for (mbob, mbret) in dataset.iterbatches((seg["ob"], seg["tdlamret"]), 
-                include_final_partial_batch=False, batch_size=64):
+                for (mbob, mbret) in dataset.iterbatches((seg["ob"], seg["tdlamret"]),
+                                                         include_final_partial_batch=False, batch_size=64):
                     g = allmean(compute_vflossandgrad(mbob, mbret))
                     vfadam.update(g, vf_stepsize)
 
         logger.record_tabular("ev_tdlam_before", explained_variance(vpredbefore, tdlamret))
 
-        lrlocal = (seg["ep_lens"], seg["ep_rets"]) # local values
-        listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal) # list of tuples
+        lrlocal = (seg["ep_lens"], seg["ep_rets"])  # local values
+        listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal)  # list of tuples
         lens, rews = map(flatten_lists, zip(*listoflrpairs))
         lenbuffer.extend(lens)
         rewbuffer.extend(rews)
@@ -284,8 +292,9 @@ def learn(env, policy_func, *,
         logger.record_tabular("TimestepsSoFar", timesteps_so_far)
         logger.record_tabular("TimeElapsed", time.time() - tstart)
 
-        if rank==0:
+        if rank == 0:
             logger.dump_tabular()
+
 
 def flatten_lists(listoflists):
     return [el for list_ in listoflists for el in list_]

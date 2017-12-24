@@ -1,13 +1,13 @@
 import argparse
-import gym
-import numpy as np
 import os
 
-import baselines.common.tf_util as U
+import gym
+import numpy as np
+from baselines.common.atari_wrappers_deprecated import wrap_dqn
 
+import baselines.common.tf_util as U
 from baselines import deepq, bench
 from baselines.common.misc_util import get_wrapper_by_name, boolean_flag, set_global_seeds
-from baselines.common.atari_wrappers_deprecated import wrap_dqn
 from baselines.deepq.experiments.atari.model import model, dueling_model
 
 
@@ -23,7 +23,8 @@ def parse_args():
     # Environment
     parser.add_argument("--env", type=str, required=True, help="name of the game")
     parser.add_argument("--model-dir", type=str, default=None, help="load model from this directory. ")
-    boolean_flag(parser, "stochastic", default=True, help="whether or not to use stochastic actions according to models eps value")
+    boolean_flag(parser, "stochastic", default=True,
+                 help="whether or not to use stochastic actions according to models eps value")
     boolean_flag(parser, "dueling", default=False, help="whether or not to use dueling model")
 
     return parser.parse_args()
@@ -57,7 +58,7 @@ def wang2015_eval(game_name, act, stochastic):
                 episode_rewards.append(sum(env_monitored.rewards))
                 break
         print("Num steps in episode {} was {} yielding {} reward".format(
-              num_noops, eval_episode_steps, episode_rewards[-1]), flush=True)
+            num_noops, eval_episode_steps, episode_rewards[-1]), flush=True)
     print("Evaluation results: " + str(np.mean(episode_rewards)))
     print("=============================================================")
     return np.mean(episode_rewards)
