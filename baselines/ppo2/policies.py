@@ -9,19 +9,17 @@ class MemoryPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, size_mem=256, reuse=False):
         nenv = nbatch // nsteps
 
-        nh, nw, nc = ob_space.shape
-        ob_shape = (nbatch, nh, nw, nc)
+        # nh, nw, nc = ob_space.shape
+        # ob_shape = (nbatch, nh, nw, nc)
+        ob_shape = (nbatch,) + ob_space.shape
         nact = ac_space.n
         X = tf.placeholder(tf.uint8, ob_shape)  # obs
         M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, size_mem * 2])  # states
         with tf.variable_scope("model", reuse=reuse):
-            h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
-            h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
-            h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
-            h3 = conv_to_fc(h3)
-            h4 = fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2))
-            xs = batch_to_seq(h4, nenv, nsteps)
+            h = self.preprocess(X)
+            h = fc(h, 'fc1', nh=512, init_scale=np.sqrt(2))
+            xs = batch_to_seq(h, nenv, nsteps)
             ms = batch_to_seq(M, nenv, nsteps)
             h5, snew = self.memory_fn(xs, ms, S, nh=size_mem)
             h5 = seq_to_batch(h5)
@@ -51,6 +49,13 @@ class MemoryPolicy(object):
         self.value = value
 
     @staticmethod
+    def preprocess(X):
+        h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
+        h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
+        h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
+        return conv_to_fc(h3)
+
+    @staticmethod
     def memory_fn(xs, ms, S, nh):
         raise NotImplemented
 
@@ -65,6 +70,10 @@ class LstmPolicy(MemoryPolicy):
     @staticmethod
     def memory_fn(xs, ms, S, nh):
         return lstm(xs, ms, S, 'lstm1', nh=nh)
+
+    @staticmethod
+    def preprocess(X):
+        return tf.cast(X, tf.float32)
 
 
 class CapsulesPolicy(MemoryPolicy):
