@@ -49,8 +49,11 @@ def main():
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--policy', help='Policy architecture', choices=['cnn', 'lstm', 'lnlstm'], default='cnn')
     parser.add_argument('--num-timesteps', type=int, default=int(10e6))
+    parser.add_argument('--log-dir', help='logdir for tensorboard', default=None)
+    parser.add_argument('--output-format', help='stdout|log|json|csv|tensorboard',
+                        default='tensorboard')
     args = parser.parse_args()
-    logger.configure()
+    logger.configure(dir=args.log_dir, format_strs=args.output_format)
     train(args.env, num_timesteps=args.num_timesteps, seed=args.seed,
         policy=args.policy)
 
