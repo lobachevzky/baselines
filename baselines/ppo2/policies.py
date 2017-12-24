@@ -64,7 +64,7 @@ class LnLstmPolicy(MemoryPolicy):
 class LstmPolicy(MemoryPolicy):
     @staticmethod
     def memory_fn(xs, ms, S, nh):
-        return lnlstm(xs, ms, S, 'lstm1', nh=nh)
+        return lstm(xs, ms, S, 'lstm1', nh=nh)
 
 
 class CapsulesPolicy(MemoryPolicy):
