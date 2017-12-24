@@ -214,7 +214,7 @@ def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
                     slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
                     mblossvals.append(model.train(lrnow, cliprangenow, *slices))
         else:  # recurrent version
-            assert nenvs % nminibatches == 0
+            assert nenvs % nminibatches == 0, "{}, {}".format(nenvs, nminibatches)
             envsperbatch = nenvs // nminibatches
             envinds = np.arange(nenvs)
             flatinds = np.arange(nenvs * nsteps).reshape(nenvs, nsteps)

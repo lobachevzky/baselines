@@ -13,9 +13,11 @@ def train(env_id, num_timesteps, seed):
     import tensorflow as tf
     from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
     ncpu = 1
+
     config = tf.ConfigProto(allow_soft_placement=True,
                             intra_op_parallelism_threads=ncpu,
-                            inter_op_parallelism_threads=ncpu)
+                            inter_op_parallelism_threads=ncpu,
+                            gpu_options=tf.GPUOptions(per_process_gpu_memory_fraction=0.333))
     tf.Session(config=config).__enter__()
 
     def make_env():
@@ -27,8 +29,8 @@ def train(env_id, num_timesteps, seed):
     env = VecNormalize(env)
 
     set_global_seeds(seed)
-    policy = MlpPolicy
-    ppo2.learn(policy=policy, env=env, nsteps=2048, nminibatches=32,
+    policy = LstmPolicy
+    ppo2.learn(policy=policy, env=env, nsteps=2048, nminibatches=1,
                lam=0.95, gamma=0.99, noptepochs=10, log_interval=1,
                ent_coef=0.0,
                lr=3e-4,
