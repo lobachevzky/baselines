@@ -29,7 +29,8 @@ def train(env_id, num_timesteps, seed, policy):
 
     def make_env(rank):
         def env_fn():
-            env = make_atari(env_id)
+            # env = make_atari(env_id)
+            env = gym.make(env_id)
             env.seed(seed + rank)
             env = bench.Monitor(env, logger.get_dir() and osp.join(logger.get_dir(), str(rank)))
             return wrap_deepmind(env)
