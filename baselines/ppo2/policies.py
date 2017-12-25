@@ -111,12 +111,12 @@ class LstmPolicy(object):
         self.initial_state = None
 
 
-        def step(ob, state, mask):
-            return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
+        # def step(ob, state, mask):
+        #     return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
 
-        # def step(ob, *_args, **_kwargs):
-        #     a, v, neglogp = sess.run([a0, vf, neglogp0], {X: ob})
-        #     return a, v, self.initial_state, neglogp
+        def step(ob, *_args, **_kwargs):
+            a, v, neglogp = sess.run([a0, vf, neglogp0], {X: ob})
+            return a, v, self.initial_state, neglogp
 
         def value(ob, *_args, **_kwargs):
             return sess.run(vf, {X: ob})
