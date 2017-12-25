@@ -71,9 +71,9 @@ class LstmPolicy(MemoryPolicy):
     def memory_fn(xs, ms, S, nh):
         return lstm(xs, ms, S, 'lstm1', nh=nh)
 
-    @staticmethod
-    def preprocess(X):
-        return tf.cast(X, tf.float32)
+    # @staticmethod
+    # def preprocess(X):
+    #     return tf.cast(X, tf.float32)
 
 
 class CapsulesPolicy(MemoryPolicy):
