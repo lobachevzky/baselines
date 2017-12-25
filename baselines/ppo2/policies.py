@@ -50,10 +50,17 @@ class MemoryPolicy(object):
 
     @staticmethod
     def preprocess(X):
-        h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
-        h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
-        h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
-        return conv_to_fc(h3)
+        X = tf.cast(X, tf.float32)
+        if len(X.shape) == 4:
+            h = conv(X / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
+            h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
+            h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
+            return conv_to_fc(h3)
+        elif len(X.shape) <= 2:
+            return X
+        else:
+            raise RuntimeError('Cannot process inputs with shape {}.'.format(X.shape))
+
 
     @staticmethod
     def memory_fn(xs, ms, S, nh):
