@@ -5,53 +5,8 @@ from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch
 from baselines.common.distributions import make_pdtype
 
 
-class LnLstmPolicy(object):
-    def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, nlstm=256, reuse=False):
-        nenv = nbatch // nsteps
-        nh, nw, nc = ob_space.shape
-        ob_shape = (nbatch, nh, nw, nc)
-        nact = ac_space.n
-        X = tf.placeholder(tf.uint8, ob_shape)  # obs
-        M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, nlstm * 2])  # states
-        with tf.variable_scope("model", reuse=reuse):
-            h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
-            h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
-            h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
-            h3 = conv_to_fc(h3)
-            h4 = fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2))
-            xs = batch_to_seq(h4, nenv, nsteps)
-            ms = batch_to_seq(M, nenv, nsteps)
-            h5, snew = lnlstm(xs, ms, S, 'lstm1', nh=nlstm)
-            h5 = seq_to_batch(h5)
-            pi = fc(h5, 'pi', nact, act=lambda x: x)
-            vf = fc(h5, 'v', 1, act=lambda x: x)
-
-        self.pdtype = make_pdtype(ac_space)
-        self.pd = self.pdtype.pdfromflat(pi)
-
-        v0 = vf[:, 0]
-        a0 = self.pd.sample()
-        neglogp0 = self.pd.neglogp(a0)
-        self.initial_state = np.zeros((nenv, nlstm * 2), dtype=np.float32)
-
-        def step(ob, state, mask):
-            return sess.run([a0, v0, snew, neglogp0], {X: ob, S: state, M: mask})
-
-        def value(ob, state, mask):
-            return sess.run(v0, {X: ob, S: state, M: mask})
-
-        self.X = X
-        self.M = M
-        self.S = S
-        self.pi = pi
-        self.vf = vf
-        self.step = step
-        self.value = value
-
-
-class LstmPolicy(object):
-    def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, nlstm=256, reuse=False):
+class MemoryPolicy(object):
+    def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, size_mem=256, reuse=False):
         nenv = nbatch // nsteps
 
         # nh, nw, nc = ob_space.shape
@@ -60,16 +15,13 @@ class LstmPolicy(object):
         nact = ac_space.n
         X = tf.placeholder(tf.uint8, ob_shape)  # obs
         M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, nlstm * 2])  # states
+        S = tf.placeholder(tf.float32, [nenv, size_mem * 2])  # states
         with tf.variable_scope("model", reuse=reuse):
-            h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
-            h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
-            h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
-            h3 = conv_to_fc(h3)
-            h4 = fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2))
-            xs = batch_to_seq(h4, nenv, nsteps)
+            h = self.preprocess(X)
+            h = fc(h, 'fc1', nh=512, init_scale=np.sqrt(2))
+            xs = batch_to_seq(h, nenv, nsteps)
             ms = batch_to_seq(M, nenv, nsteps)
-            h5, snew = lstm(xs, ms, S, 'lstm1', nh=nlstm)
+            h5, snew = self.memory_fn(xs, ms, S, nh=size_mem)
             h5 = seq_to_batch(h5)
             pi = fc(h5, 'pi', nact, act=lambda x: x)
             vf = fc(h5, 'v', 1, act=lambda x: x)
@@ -80,7 +32,7 @@ class LstmPolicy(object):
         v0 = vf[:, 0]
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        self.initial_state = np.zeros((nenv, nlstm * 2), dtype=np.float32)
+        self.initial_state = np.zeros((nenv, size_mem * 2), dtype=np.float32)
 
         def step(ob, state, mask):
             return sess.run([a0, v0, snew, neglogp0], {X: ob, S: state, M: mask})
@@ -95,6 +47,37 @@ class LstmPolicy(object):
         self.vf = vf
         self.step = step
         self.value = value
+
+    @staticmethod
+    def preprocess(X):
+        h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
+        h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
+        h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
+        return conv_to_fc(h3)
+
+    @staticmethod
+    def memory_fn(xs, ms, S, nh):
+        raise NotImplemented
+
+
+class LnLstmPolicy(MemoryPolicy):
+    @staticmethod
+    def memory_fn(xs, ms, S, nh):
+        return lnlstm(xs, ms, S, 'lnlstm1', nh=nh)
+
+
+class LstmPolicy(MemoryPolicy):
+    @staticmethod
+    def memory_fn(xs, ms, S, nh):
+        return lstm(xs, ms, S, 'lstm1', nh=nh)
+
+    # @staticmethod
+    # def preprocess(X):
+    #     return tf.cast(X, tf.float32)
+
+
+class CapsulesPolicy(MemoryPolicy):
+    pass
 
 
 class CnnPolicy(object):

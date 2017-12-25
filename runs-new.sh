@@ -1,8 +1,6 @@
 #! /usr/bin/env bash
 
-port_num=${2:-8}
-
-for i in $(seq 0 4);
+for i in $(seq 0 2);
 do
-  runs new "${1}${i}" "python baselines/ppo2/run_atari.py --seed=${i}" --overwrite
+  runs new "${1}${i}" "python baselines/ppo2/run_mlp.py --env=CartPole-v0 --seed=${i}" --overwrite
 done

@@ -11,14 +11,15 @@ def train(env_id, num_timesteps, seed, policy):
     from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
     from baselines.common.vec_env.vec_frame_stack import VecFrameStack
     from baselines.ppo2 import ppo2
-    from baselines.ppo2.policies import CnnPolicy, LstmPolicy, LnLstmPolicy
+    from baselines.ppo2.policies import CnnPolicy, LstmPolicy, LnLstmPolicy, MlpPolicy
     import gym
     import logging
     import multiprocessing
     import os.path as osp
     import tensorflow as tf
     ncpu = multiprocessing.cpu_count()
-    if sys.platform == 'darwin': ncpu //= 2
+    if sys.platform == 'darwin':
+        ncpu //= 2
     config = tf.ConfigProto(allow_soft_placement=True,
                             intra_op_parallelism_threads=ncpu,
                             inter_op_parallelism_threads=ncpu)
@@ -31,7 +32,7 @@ def train(env_id, num_timesteps, seed, policy):
             env = make_atari(env_id)
             env.seed(seed + rank)
             env = bench.Monitor(env, logger.get_dir() and osp.join(logger.get_dir(), str(rank)))
-            return wrap_deepmind(env)
+            return env # wrap_deepmind(env)
 
         return env_fn
 
@@ -39,7 +40,8 @@ def train(env_id, num_timesteps, seed, policy):
     env = SubprocVecEnv([make_env(i) for i in range(nenvs)])
     set_global_seeds(seed)
     env = VecFrameStack(env, 4)
-    policy = {'cnn': CnnPolicy, 'lstm': LstmPolicy, 'lnlstm': LnLstmPolicy}[policy]
+    policy = {'cnn': CnnPolicy, 'lstm': LstmPolicy,
+              'lnlstm': LnLstmPolicy, 'mlp': MlpPolicy}[policy]
     ppo2.learn(policy=policy, env=env, nsteps=128, nminibatches=4,
                lam=0.95, gamma=0.99, noptepochs=4, log_interval=1,
                ent_coef=.01,
@@ -57,7 +59,7 @@ def main():
     parser.add_argument('--log-dir', help='logdir for tensorboard', default=None)
     parser.add_argument('--output-format',
                         help='comma separated list of stdout|log|json|csv|tensorboard',
-                        default='tensorboard')
+                        default='tensorboard,stdout')
     args = parser.parse_args()
     logger.configure(dir=args.log_dir, format_strs=args.output_format.split(','))
     train(args.env, num_timesteps=args.num_timesteps, seed=args.seed,
