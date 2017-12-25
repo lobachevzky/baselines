@@ -4,11 +4,47 @@ import tensorflow as tf
 import tensorflow.contrib.rnn as rnn
 import distutils.version
 import abc
-from gaussian_log import NormalWithLogScale
-from spatial_transformer import transformer
+from tensorflow.contrib.distributions import Normal
+from gym import spaces
 
 use_tf100_api = distutils.version.LooseVersion(tf.VERSION) >= distutils.version.LooseVersion('1.0.0')
 EPSILON = 0.00001
+
+
+class NormalWithLogScale(Normal):
+    """Normal with log scales."""
+
+    def __init__(self,
+                 loc,
+                 log_scale,
+                 validate_args=False,
+                 allow_nan_stats=True,
+                 name="NormalWithLogScale"):
+        parameters = locals()
+        with tf.name_scope(name, values=[log_scale]):
+            super(NormalWithLogScale, self).__init__(
+                loc=loc,
+                scale=tf.exp(log_scale),
+                validate_args=validate_args,
+                allow_nan_stats=allow_nan_stats,
+                name=name)
+            self._parameters = parameters
+            self._log_scale = log_scale
+
+    @property
+    def log_scale(self):
+        return self._log_scale
+
+    def _z(self, x):
+        return (x - self.loc) * tf.exp(-self.log_scale)
+
+    def _log_normalization(self):
+        return 0.5 * np.log(2.0 * np.pi) + self.log_scale
+
+    def _entropy(self):
+        # Use broadcasting rules to calculate the full broadcast scale.
+        log_scale = self.log_scale * tf.ones_like(self.loc)
+        return 0.5 * np.log(2. * np.pi * np.e) + log_scale
 
 
 def normalized_columns_initializer(std=1.0):
@@ -75,7 +111,9 @@ def log_prob(actions, dist, discrete):
 class Policy(object):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, ob_space, ac_space):
+    def __init__(self, sess, ob_space, ac_space, nbatch_act, nbatch_train,
+                 nsteps, ent_coef, vf_coef, max_grad_norm):
+        self.sess = sess
         self.x = x = tf.placeholder(tf.float32, [None] + list(ob_space.shape))
 
         self.ac_space = ac_space
@@ -108,7 +146,7 @@ class Policy(object):
         self.dist_params = tf.reshape(self.dist_params, [-1, ac_space.dim(), n_dist_params])
         self.vf = tf.reshape(linear(h, 1, "value", normalized_columns_initializer(1.0)), [-1])
 
-        if ac_space.is_continuous:
+        if isinstance(ac_space, spaces.Box):
             mean, stdev = tf.unstack(self.dist_params, axis=2)
             self.dist = NormalWithLogScale(mean, stdev)
             self.action = tf.reshape(self.dist.sample(), ac_space.shape)
@@ -151,14 +189,12 @@ class MLPpolicy(Policy):
     def get_initial_features(self, last_features=None):
         return []
 
-    def act(self, ob):
-        sess = tf.get_default_session()
-        return sess.run([self.action, self.vf],
+    def step(self, ob):
+        return self.sess.run([self.action, self.vf],
                         {self.x: [ob]})
 
     def value(self, ob):
-        sess = tf.get_default_session()
-        return sess.run(self.vf, {self.x: [ob]})[0]
+        return self.sess.run(self.vf, {self.x: [ob]})[0]
 
 
 # params taken from paper
@@ -202,99 +238,8 @@ class LSTMpolicy(Policy):
         return self.state_init
 
     def act(self, ob, c, h):
-        sess = tf.get_default_session()
-        return sess.run([self.action, self.vf] + self.state_out,
+        return self.sess.run([self.action, self.vf] + self.state_out,
                         {self.x: [ob], self.state_in[0]: c, self.state_in[1]: h})
 
     def value(self, ob, c, h):
-        sess = tf.get_default_session()
-        return sess.run(self.vf, {self.x: [ob], self.state_in[0]: c, self.state_in[1]: h})[0]
-
-
-# noinspection PyAttributeOutsideInit
-class NavPolicy1(Policy):
-    def pass_through_network(self, x):
-        hidden_size = 50
-        height = width = 4
-        lstm_size = 4 + (height * width * hidden_size) / 4
-        step_size = tf.shape(self.x)[0]
-
-        if use_tf100_api:
-            lstm = rnn.BasicLSTMCell(lstm_size, state_is_tuple=True)
-        else:
-            lstm = rnn.rnn_cell.BasicLSTMCell(lstm_size, state_is_tuple=True)
-
-        self.state_size = lstm.state_size
-
-        m_shape = height, width, hidden_size
-        c_init = np.zeros((1, lstm.state_size.c), np.float32)
-        h_init = np.zeros((1, lstm.state_size.h), np.float32)
-        m_init = np.zeros(m_shape, np.float32)
-
-        self.state_init = [c_init, h_init, m_init]
-        c_in = tf.placeholder(tf.float32, [1, lstm.state_size.c])
-        h_in = tf.placeholder(tf.float32, [1, lstm.state_size.h])
-        m_in = tf.placeholder(tf.float32, m_shape)
-
-        self.state_in = [c_in, h_in, m_in]
-
-        if use_tf100_api:
-            state_in = rnn.LSTMStateTuple(c_in, h_in)
-        else:
-            state_in = rnn.rnn_cell.LSTMStateTuple(c_in, h_in)
-
-        x = tf.expand_dims(x, 0)
-        lstm_outputs, lstm_state = tf.nn.dynamic_rnn(
-            lstm, x, initial_state=state_in, sequence_length=[step_size],
-            time_major=False)  # lstm_outputs 1 x step_size x lstm_size
-
-        lstm_outputs = tf.squeeze(lstm_outputs, 0)
-
-        alpha, angle, translation, add = tf.split(lstm_outputs, [1, 1, 2, -1], axis=1)
-        alpha = tf.reshape(alpha, [step_size, 1, 1, 1])
-        add = tf.reshape(add, [step_size, height / 2, width / 2, hidden_size])
-        add = tf.concat([add, tf.zeros_like(add)], 1)
-        add = tf.concat([add, tf.zeros_like(add)], 2)
-
-        theta = tf.stack([
-            tf.concat([tf.cos(angle), tf.sin(angle)], 1),
-            tf.concat([-tf.sin(angle), tf.cos(angle)], 1),
-            translation
-        ], axis=2)
-
-        hidden_map = tf.tile(m_in, [step_size, 1, 1])  # step_size * height, width, hidden_size
-        hidden_map = tf.reshape(hidden_map, [step_size, height, width, hidden_size])
-
-        transformed = transformer(hidden_map, theta, (height, width))
-        transformed = alpha * transformed + (1 - alpha) * add
-
-        lstm_c, lstm_h = lstm_state  # , both 1 x size
-
-        self.state_out = [lstm_c[:1, :], lstm_h[:1, :], m_in]
-        return tf.reduce_sum(transformed, axis=[1, 2])
-
-    def get_initial_features(self, last_features=None):
-        if last_features is None:
-            c, h, m = self.state_init
-        else:
-            c, h, m = last_features
-        return [c, h, m]
-
-    def act(self, ob, c, h, m):
-        sess = tf.get_default_session()
-        return sess.run([self.action, self.vf] + self.state_out,
-                        {self.x: [ob],
-                         self.state_in[0]: c,
-                         self.state_in[1]: h,
-                         self.state_in[2]: m,
-                         })
-
-    def value(self, ob, c, h, m):
-        sess = tf.get_default_session()
-        return sess.run(self.vf,
-                        {self.x: [ob],
-                         self.state_in[0]: c,
-                         self.state_in[1]: h,
-                         self.state_in[2]: m,
-                         })[0]
-
+        return self.sess.run(self.vf, {self.x: [ob], self.state_in[0]: c, self.state_in[1]: h})[0]

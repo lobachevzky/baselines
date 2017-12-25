@@ -3,6 +3,7 @@ import argparse
 import sys
 
 from baselines import bench, logger
+from baselines.ppo2.model import LSTMpolicy
 
 
 def train(env_id, num_timesteps, seed, policy):
@@ -40,8 +41,9 @@ def train(env_id, num_timesteps, seed, policy):
     env = SubprocVecEnv([make_env(i) for i in range(nenvs)])
     set_global_seeds(seed)
     env = VecFrameStack(env, 1)
-    policy = {'cnn': CnnPolicy, 'lstm': LstmPolicy,
-              'lnlstm': LnLstmPolicy, 'mlp': MlpPolicy}[policy]
+    # policy = {'cnn': CnnPolicy, 'lstm': LstmPolicy,
+    #           'lnlstm': LnLstmPolicy, 'mlp': MlpPolicy}[policy]
+    policy = LSTMpolicy
     ppo2.learn(policy=policy, env=env, nsteps=128, nminibatches=1,
                lam=0.95, gamma=0.99, noptepochs=4, log_interval=1,
                ent_coef=.01,
