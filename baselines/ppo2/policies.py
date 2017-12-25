@@ -62,11 +62,12 @@ class LstmPolicy(object):
         M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, nlstm * 2])  # states
         with tf.variable_scope("model", reuse=reuse):
-            h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
-            h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
-            h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
-            h3 = conv_to_fc(h3)
-            h4 = fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2))
+            h = tf.cast(X, tf.float32)
+            # h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
+            # h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
+            # h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
+            # h3 = conv_to_fc(h3)
+            h4 = fc(h, 'fc1', nh=512, init_scale=np.sqrt(2))
             xs = batch_to_seq(h4, nenv, nsteps)
             ms = batch_to_seq(M, nenv, nsteps)
             h5, snew = lstm(xs, ms, S, 'lstm1', nh=nlstm)
