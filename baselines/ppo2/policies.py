@@ -54,8 +54,9 @@ class LstmPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, nlstm=256, reuse=False):
         nenv = nbatch // nsteps
 
-        nh, nw, nc = ob_space.shape
-        ob_shape = (nbatch, nh, nw, nc)
+        # nh, nw, nc = ob_space.shape
+        # ob_shape = (nbatch, nh, nw, nc)
+        ob_shape = (nbatch,) + ob_space.shape
         nact = ac_space.n
         X = tf.placeholder(tf.uint8, ob_shape)  # obs
         M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)

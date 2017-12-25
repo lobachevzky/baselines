@@ -2,6 +2,7 @@
 import argparse
 
 from baselines import bench, logger
+from baselines.ppo2.policies import LstmPolicy
 
 
 def train(env_id, num_timesteps, seed):
