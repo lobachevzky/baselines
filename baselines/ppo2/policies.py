@@ -94,9 +94,10 @@ class LstmPolicy(object):
         S = tf.placeholder(tf.float32, [nenv, size_mem * 2])  # states
 
         with tf.variable_scope("model", reuse=reuse):
-            h1 = fc(X, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
-            h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            # h1 = fc(X, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            # h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
 
+            h2 = tf.cast(X, tf.float32)
             xs = batch_to_seq(h2, nenv, nsteps)
             ms = batch_to_seq(M, nenv, nsteps)
             h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
