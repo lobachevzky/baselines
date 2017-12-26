@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.ops.rnn_cell_impl import LSTMCell, LSTMStateTuple
 
 from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
 from baselines.common.distributions import make_pdtype
@@ -103,8 +104,11 @@ class LstmPolicy(object):
             # h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
             # h5 = seq_to_batch(h5)
             h5 = h2
-            h5 = tf.reshape(h5, shape=[nenv, 1, -1])
-            h5 = tf.reshape(h5, shape=[nenv, -1])
+            h5 = tf.expand_dims(h5, axis=1)
+            # cell = LSTMCell(size_mem)
+            # h5, S = tf.nn.dynamic_rnn(cell, h5, dtype=tf.float32)
+
+            h5 = tf.squeeze(h5, axis=1)
             snew = S
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
