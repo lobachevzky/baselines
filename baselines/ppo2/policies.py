@@ -93,6 +93,7 @@ class LstmPolicy(object):
         nenv = nbatch // nsteps
         M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, size_mem * 2])  # states
+        state_tuple = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1))
 
         with tf.variable_scope("model", reuse=reuse):
             # h1 = fc(X, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
@@ -109,6 +110,9 @@ class LstmPolicy(object):
             # h5, S = tf.nn.dynamic_rnn(cell, h5, dtype=tf.float32)
 
             h5 = tf.squeeze(h5, axis=1)
+            s_out = tf.stack(state_tuple)
+
+            h5 = tf.Print(h5, [tf.shape(s_out)])
             snew = S
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
@@ -126,7 +130,9 @@ class LstmPolicy(object):
         # v0 = vf[0]
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        self.initial_state = np.zeros((nenv, size_mem * 2), dtype=np.float32)
+        # self.initial_state = np.zeros((nenv, size_mem * 2), dtype=np.float32)
+        self.initial_state = np.arange(
+            nenv * size_mem * 2, dtype=np.float32).reshape(nenv, size_mem * 2)
 
         def step(ob, state, mask):
             return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
