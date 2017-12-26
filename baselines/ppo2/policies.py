@@ -66,15 +66,14 @@ class LnLstmPolicy(MemoryPolicy):
     def memory_fn(xs, ms, S, nh):
         return lnlstm(xs, ms, S, 'lnlstm1', nh=nh)
 
+    # class LstmPolicy(MemoryPolicy):
+    #     @staticmethod
+    #     def memory_fn(xs, ms, S, nh):
+    #         return lstm(xs, ms, S, 'lstm1', nh=nh)
 
-# class LstmPolicy(MemoryPolicy):
-#     @staticmethod
-#     def memory_fn(xs, ms, S, nh):
-#         return lstm(xs, ms, S, 'lstm1', nh=nh)
-
-        # @staticmethod
-        # def preprocess(X):
-        #     return tf.cast(X, tf.float32)
+    # @staticmethod
+    # def preprocess(X):
+    #     return tf.cast(X, tf.float32)
 
 
 class CapsulesPolicy(MemoryPolicy):
@@ -106,10 +105,14 @@ class LstmPolicy(object):
             h5 = h2
             h5 = tf.expand_dims(h5, axis=1)
 
-            state_tuple = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1)) # input to LSTM
+            # state_tuple = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1)) # input to LSTM
+            # state = tf.reshape(S, shape=[nenv, size_mem, 2])
+            # state = tf.transpose(state, [1, 0, 2])
             cell = LSTMCell(size_mem)
-            h5, s_out = tf.nn.dynamic_rnn(cell, h5, dtype=tf.float32,)
-                                          # initial_state=state_tuple)
+            state_tuple = cell.zero_state(batch_size=nbatch, dtype=tf.float32)
+            # state_tuple = cell.zero_state(batch_size, dtype)
+            h5, s_out = tf.nn.dynamic_rnn(cell, h5, dtype=tf.float32,
+                                          initial_state=state_tuple)
             # s_out = tf.stack(state_tuple)  # output of LSTM
 
             snew = tf.reshape(tf.transpose(s_out, [1, 0, 2]), shape=[nenv, -1])
@@ -139,7 +142,6 @@ class LstmPolicy(object):
 
         def value(ob, state, mask):
             return sess.run(vf, {X: ob, S: state, M: mask})
-
 
         # def step(ob, *_args, **_kwargs):
         #     a, v, neglogp = sess.run([a0, vf, neglogp0], {X: ob})
