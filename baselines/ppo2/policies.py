@@ -93,7 +93,6 @@ class LstmPolicy(object):
         nenv = nbatch // nsteps
         M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, size_mem * 2])  # states
-        state_tuple = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1))
 
         with tf.variable_scope("model", reuse=reuse):
             # h1 = fc(X, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
@@ -110,10 +109,11 @@ class LstmPolicy(object):
             # h5, S = tf.nn.dynamic_rnn(cell, h5, dtype=tf.float32)
 
             h5 = tf.squeeze(h5, axis=1)
-            s_out = tf.stack(state_tuple)
 
-            h5 = tf.Print(h5, [tf.shape(s_out)])
-            snew = S
+            state_tuple = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1)) # input to LSTM
+            s_out = tf.stack(state_tuple)  # output of LSTM
+
+            snew = tf.reshape(tf.transpose(s_out, [1, 0, 2]), shape=[nenv, -1])
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
