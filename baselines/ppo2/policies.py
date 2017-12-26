@@ -100,8 +100,10 @@ class LstmPolicy(object):
             h2 = tf.cast(X, tf.float32)
             xs = batch_to_seq(h2, nenv, nsteps)
             ms = batch_to_seq(M, nenv, nsteps)
-            h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
-            h5 = seq_to_batch(h5)
+            # h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
+            # h5 = seq_to_batch(h5)
+            h5, snew = h2, S
+
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
