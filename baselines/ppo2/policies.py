@@ -97,7 +97,9 @@ class LstmPolicy(object):
             h1 = fc(X, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
 
-            snew = tf.identity(S)
+            xs = batch_to_seq(h2, nenv, nsteps)
+            ms = batch_to_seq(M, nenv, nsteps)
+            h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
 
             pi = fc(h2, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
