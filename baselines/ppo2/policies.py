@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell_impl import LSTMCell, LSTMStateTuple
 
-from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
+from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm, ortho_init
 from baselines.common.distributions import make_pdtype
 
 
@@ -66,14 +66,14 @@ class LnLstmPolicy(MemoryPolicy):
     def memory_fn(xs, ms, S, nh):
         return lnlstm(xs, ms, S, 'lnlstm1', nh=nh)
 
-    # class LstmPolicy(MemoryPolicy):
-    #     @staticmethod
-    #     def memory_fn(xs, ms, S, nh):
-    #         return lstm(xs, ms, S, 'lstm1', nh=nh)
+        # class LstmPolicy(MemoryPolicy):
+        #     @staticmethod
+        #     def memory_fn(xs, ms, S, nh):
+        #         return lstm(xs, ms, S, 'lstm1', nh=nh)
 
-    # @staticmethod
-    # def preprocess(X):
-    #     return tf.cast(X, tf.float32)
+        # @staticmethod
+        # def preprocess(X):
+        #     return tf.cast(X, tf.float32)
 
 
 class CapsulesPolicy(MemoryPolicy):
@@ -90,7 +90,9 @@ class LstmPolicy(object):
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
 
         nenv = nbatch // nsteps
-        M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
+        X_size = int(np.prod(ob_shape) / nenv / nsteps)
+        assert X_size * nenv * nsteps == np.prod(ob_shape)
+        M = tf.placeholder(tf.float32, [nenv])  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, size_mem * 2])  # states
 
         with tf.variable_scope("model", reuse=reuse):
@@ -98,29 +100,49 @@ class LstmPolicy(object):
             # h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
 
             h2 = tf.cast(X, tf.float32)
-            xs = batch_to_seq(h2, nenv, nsteps)
-            ms = batch_to_seq(M, nenv, nsteps)
+            # xs = batch_to_seq(h2, nenv, nsteps)
+            # ms = batch_to_seq(M, nenv, nsteps)
             # h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
             # h5 = seq_to_batch(h5)
-            h5 = h2
-            h5 = tf.expand_dims(h5, axis=1)
+            # h5 = h2
+            assert h2.shape == ob_shape
+            inputs = tf.reshape(h2, shape=[nenv, nsteps, X_size])
 
-            # state_tuple = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1)) # input to LSTM
             # state = tf.reshape(S, shape=[nenv, size_mem, 2])
             # state = tf.transpose(state, [1, 0, 2])
             cell = LSTMCell(size_mem)
-            state_tuple = cell.zero_state(batch_size=nbatch, dtype=tf.float32)
-            # state_tuple = cell.zero_state(batch_size, dtype)
-            h5, s_out = tf.nn.dynamic_rnn(cell, h5, dtype=tf.float32,
-                                          initial_state=state_tuple)
-            # s_out = tf.stack(state_tuple)  # output of LSTM
+            state_in = cell.zero_state(batch_size=nenv, dtype=tf.float32)
+            state_in2 = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1))  # input to LSTM
+            # h5 = tf.Print(h5, list(map(tf.shape, [state_tuple, state_tuple2, S])))
+            inputs = tf.Print(inputs, [cell.state_size], message='cell.state_size')
+            inputs = tf.Print(inputs, [tf.shape(state_in)], message='cell.zero_state')
+            inputs = tf.Print(inputs, [tf.shape(state_in2)], message='LSTMStateTuple')
+            inputs = tf.Print(inputs, [tf.shape(S)], message='S')
+            inputs = tf.Print(inputs, [tf.shape(inputs)], message='h3')
+            inputs = tf.Print(inputs, [nbatch], message='nbatch')
+            inputs = tf.Print(inputs, [nenv], message='nenv')
 
-            snew = tf.reshape(tf.transpose(s_out, [1, 0, 2]), shape=[nenv, -1])
-            h5 = tf.squeeze(h5, axis=1)
+            assert inputs.shape == [nenv, nsteps, X_size]
+            assert state_in2.c.shape == [nenv, size_mem], state_in2.c.shape
+            assert state_in2.h.shape == [nenv, size_mem], state_in2.h.shape
+            # state_tuple = cell.zero_state(batch_size, dtype)
+            outputs, state_out = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32,
+                                                   initial_state=state_in2)
+            # w = tf.get_variable("w", [1, X_size, cell.output_size])  # TODO: replace with lstm
+            # outputs = tf.matmul(inputs, w)
+            # state_out = state_in
+            assert outputs.shape == [nenv, nsteps, cell.output_size]
+            assert state_out.h.shape == [nenv, cell.state_size.h]
+            assert state_out.c.shape == [nenv, cell.state_size.c]
+
+            # print('s_out', state_out)
+            # snew = tf.concat(values=state_out, axis=1)
+            h5 = tf.reshape(outputs, [nenv, nsteps * cell.output_size])
+            print(h5, nsteps, cell.output_size)
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
-            h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
-            h2 = fc(h1, 'vf_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            # h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            # h2 = fc(h1, 'vf_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             vf = fc(h5, 'vf', 1, act=lambda x: x)[:, 0]
             logstd = tf.get_variable(name="logstd", shape=[1, actdim],
                                      initializer=tf.zeros_initializer())
@@ -133,14 +155,18 @@ class LstmPolicy(object):
         # v0 = vf[0]
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        # self.initial_state = np.zeros((nenv, size_mem * 2), dtype=np.float32)
-        self.initial_state = np.arange(
-            nenv * size_mem * 2, dtype=np.float32).reshape(nenv, size_mem * 2)
+        self.initial_state = np.zeros((nenv, size_mem * 2), dtype=np.float32)
+
+        # self.initial_state = np.arange(
+        #     nenv * size_mem * 2, dtype=np.float32).reshape(nenv, size_mem * 2)
 
         def step(ob, state, mask):
+            # assert state.shape[0] != 2
+            print('step state', state.shape)
             return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
 
         def value(ob, state, mask):
+            print('value state', state.shape)
             return sess.run(vf, {X: ob, S: state, M: mask})
 
         # def step(ob, *_args, **_kwargs):

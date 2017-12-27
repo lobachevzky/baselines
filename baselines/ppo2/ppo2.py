@@ -179,8 +179,8 @@ def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
     nbatch = nenvs * nsteps
     nbatch_train = nbatch // nminibatches
 
-    make_model = lambda: Model(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs,
-                               nbatch_train=nbatch_train,
+    make_model = lambda: Model(policy=policy, ob_space=ob_space, ac_space=ac_space,
+                               nbatch_act=nenvs, nbatch_train=nbatch_train,
                                nsteps=nsteps, ent_coef=ent_coef, vf_coef=vf_coef,
                                max_grad_norm=max_grad_norm)
     if save_interval and logger.get_dir():
@@ -226,12 +226,17 @@ def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
                     mbenvinds = envinds[start:end]
                     mbflatinds = flatinds[mbenvinds].ravel()
                     slices = (arr[mbflatinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
+                    print('states in for loop', states.shape)
+                    print('mbenvinds in for loop', mbenvinds)
                     mbstates = states[mbenvinds]
+                    print('mbstates in for loop', mbstates.shape)
                     mblossvals.append(model.train(lrnow, cliprangenow, *slices, mbstates))
 
         lossvals = np.mean(mblossvals, axis=0)
         tnow = time.time()
         fps = int(nbatch / (tnow - tstart))
+        print('exiting...')
+        exit()
         if update % log_interval == 0 or update == 1:
             ev = explained_variance(values, returns)
             logger.logkv("serial_timesteps", update * nsteps)
