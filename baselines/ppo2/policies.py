@@ -92,53 +92,31 @@ class LstmPolicy(object):
         nenv = nbatch // nsteps
         X_size = int(np.prod(ob_shape) / nenv / nsteps)
         assert X_size * nenv * nsteps == np.prod(ob_shape)
-        M = tf.placeholder(tf.float32, [nenv])  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, size_mem * 2])  # states
+        M = tf.placeholder(tf.float32, [nbatch], name='mask')  # mask (done t-1)
+        S = tf.placeholder(tf.float32, [nenv, size_mem * 2], name='states')  # states
 
         with tf.variable_scope("model", reuse=reuse):
             # h1 = fc(X, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             # h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
 
             h2 = tf.cast(X, tf.float32)
-            # xs = batch_to_seq(h2, nenv, nsteps)
-            # ms = batch_to_seq(M, nenv, nsteps)
-            # h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
-            # h5 = seq_to_batch(h5)
-            # h5 = h2
             assert h2.shape == ob_shape
             inputs = tf.reshape(h2, shape=[nenv, nsteps, X_size])
 
-            # state = tf.reshape(S, shape=[nenv, size_mem, 2])
-            # state = tf.transpose(state, [1, 0, 2])
             cell = LSTMCell(size_mem)
-            state_in = cell.zero_state(batch_size=nenv, dtype=tf.float32)
-            state_in2 = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1))  # input to LSTM
-            # h5 = tf.Print(h5, list(map(tf.shape, [state_tuple, state_tuple2, S])))
-            inputs = tf.Print(inputs, [cell.state_size], message='cell.state_size')
-            inputs = tf.Print(inputs, [tf.shape(state_in)], message='cell.zero_state')
-            inputs = tf.Print(inputs, [tf.shape(state_in2)], message='LSTMStateTuple')
-            inputs = tf.Print(inputs, [tf.shape(S)], message='S')
-            inputs = tf.Print(inputs, [tf.shape(inputs)], message='h3')
-            inputs = tf.Print(inputs, [nbatch], message='nbatch')
-            inputs = tf.Print(inputs, [nenv], message='nenv')
-
+            state_in = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1))  # input to LSTM
             assert inputs.shape == [nenv, nsteps, X_size]
-            assert state_in2.c.shape == [nenv, size_mem], state_in2.c.shape
-            assert state_in2.h.shape == [nenv, size_mem], state_in2.h.shape
-            # state_tuple = cell.zero_state(batch_size, dtype)
+            assert state_in.c.shape == [nenv, size_mem], state_in.c.shape
+            assert state_in.h.shape == [nenv, size_mem], state_in.h.shape
             outputs, state_out = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32,
-                                                   initial_state=state_in2)
-            # w = tf.get_variable("w", [1, X_size, cell.output_size])  # TODO: replace with lstm
-            # outputs = tf.matmul(inputs, w)
-            # state_out = state_in
+                                                   initial_state=state_in)
             assert outputs.shape == [nenv, nsteps, cell.output_size]
             assert state_out.h.shape == [nenv, cell.state_size.h]
             assert state_out.c.shape == [nenv, cell.state_size.c]
 
-            # print('s_out', state_out)
-            # snew = tf.concat(values=state_out, axis=1)
-            h5 = tf.reshape(outputs, [nenv, nsteps * cell.output_size])
-            print(h5, nsteps, cell.output_size)
+            snew = tf.concat(values=state_out, axis=1)
+            assert snew.shape == [nenv, 2 * size_mem]
+            h5 = tf.reshape(outputs, [nenv * nsteps, cell.output_size])
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             # h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
@@ -162,11 +140,10 @@ class LstmPolicy(object):
 
         def step(ob, state, mask):
             # assert state.shape[0] != 2
-            print('step state', state.shape)
+            # print('step state', state.shape)
             return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
 
         def value(ob, state, mask):
-            print('value state', state.shape)
             return sess.run(vf, {X: ob, S: state, M: mask})
 
         # def step(ob, *_args, **_kwargs):

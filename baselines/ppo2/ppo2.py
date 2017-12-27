@@ -226,17 +226,12 @@ def learn(*, policy, env, nsteps, total_timesteps, ent_coef, lr,
                     mbenvinds = envinds[start:end]
                     mbflatinds = flatinds[mbenvinds].ravel()
                     slices = (arr[mbflatinds] for arr in (obs, returns, masks, actions, values, neglogpacs))
-                    print('states in for loop', states.shape)
-                    print('mbenvinds in for loop', mbenvinds)
                     mbstates = states[mbenvinds]
-                    print('mbstates in for loop', mbstates.shape)
                     mblossvals.append(model.train(lrnow, cliprangenow, *slices, mbstates))
 
         lossvals = np.mean(mblossvals, axis=0)
         tnow = time.time()
         fps = int(nbatch / (tnow - tstart))
-        print('exiting...')
-        exit()
         if update % log_interval == 0 or update == 1:
             ev = explained_variance(values, returns)
             logger.logkv("serial_timesteps", update * nsteps)
