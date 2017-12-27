@@ -100,19 +100,11 @@ class LstmPolicy(object):
             # h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
 
             h2 = tf.cast(X, tf.float32)
-            assert h2.shape == ob_shape
             inputs = tf.reshape(h2, shape=[nenv, nsteps, X_size])
-
             cell = LSTMCell(size_mem)
             state_in = LSTMStateTuple(*tf.split(value=S, num_or_size_splits=2, axis=1))  # input to LSTM
-            assert inputs.shape == [nenv, nsteps, X_size]
-            assert state_in.c.shape == [nenv, size_mem], state_in.c.shape
-            assert state_in.h.shape == [nenv, size_mem], state_in.h.shape
             outputs, state_out = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32,
                                                    initial_state=state_in)
-            assert outputs.shape == [nenv, nsteps, cell.output_size]
-            assert state_out.h.shape == [nenv, cell.state_size.h]
-            assert state_out.c.shape == [nenv, cell.state_size.c]
 
             snew = tf.concat(values=state_out, axis=1)
             assert snew.shape == [nenv, 2 * size_mem]
