@@ -194,18 +194,18 @@ class CapsulesPolicy(object):
 
             X_size = np.prod(ob_space.shape)
             h2 = tf.reshape(X, shape=[nbatch, X_size])
-            h3 = fc(h2, 'h3', 2 * X_size)
+            n_capsules = 1
+            h3 = fc(h2, 'h3', n_capsules * X_size)
             # xs = batch_to_seq(h2, nenv, nsteps)
             # ms = batch_to_seq(M, nenv, nsteps)
             # h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
             # h5 = seq_to_batch(h5)
-            n_capsules = 1
             snew = S
             b_IJ = tf.zeros([nbatch, n_capsules, n_capsules, 1, 1], dtype=np.float32)
-            h4 = tf.reshape(h3, shape=[nbatch, 2, X_size])
+            h4 = tf.reshape(h3, shape=[nbatch, n_capsules, X_size])
             h5 = routing(input=h4, b_IJ=b_IJ, output_size=X_size)
-            assert h5.shape == [nbatch, 1, 2, X_size, 1], (h5.shape, [nbatch, 1, 2, X_size, 1])
-            h5 = tf.reshape(h5, shape=[nbatch, 2 * X_size])
+            assert h5.shape == [nbatch, 1, n_capsules, X_size, 1], (h5.shape, [nbatch, 1, n_capsules, X_size, 1])
+            h5 = tf.reshape(h5, shape=[nbatch, n_capsules * X_size])
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
