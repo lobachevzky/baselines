@@ -3,6 +3,7 @@ import argparse
 import sys
 
 from baselines import bench, logger
+from baselines.ppo2.policies import CapsulesPolicy
 
 
 def train(env_id, num_timesteps, seed, policy):
@@ -41,7 +42,8 @@ def train(env_id, num_timesteps, seed, policy):
     set_global_seeds(seed)
     env = VecFrameStack(env, 4)
     policy = {'cnn': CnnPolicy, 'lstm': LstmPolicy,
-              'lnlstm': LnLstmPolicy, 'mlp': MlpPolicy}[policy]
+              'lnlstm': LnLstmPolicy, 'mlp': MlpPolicy,
+              'capsules': CapsulesPolicy}[policy]
     ppo2.learn(policy=policy, env=env, nsteps=128, nminibatches=4,
                lam=0.95, gamma=0.99, noptepochs=4, log_interval=1,
                ent_coef=.01,
@@ -55,7 +57,7 @@ def main():
     parser.add_argument('--env', help='environment ID', default='BreakoutNoFrameskip-v4')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--policy', help='Policy architecture',
-                        choices=['cnn', 'lstm', 'lnlstm', 'mlp'], default='cnn')
+                        choices=['cnn', 'lstm', 'lnlstm', 'mlp', 'capsules'], default='capsules')
     parser.add_argument('--num-timesteps', type=int, default=int(10e6))
     parser.add_argument('--log-dir', help='logdir for tensorboard', default=None)
     parser.add_argument('--output-format',

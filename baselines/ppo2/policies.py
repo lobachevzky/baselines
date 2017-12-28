@@ -65,14 +65,14 @@ class LnLstmPolicy(MemoryPolicy):
     def memory_fn(xs, ms, S, nh):
         return lnlstm(xs, ms, S, 'lnlstm1', nh=nh)
 
-    # class LstmPolicy(MemoryPolicy):
-    #     @staticmethod
-    #     def memory_fn(xs, ms, S, nh):
-    #         return lstm(xs, ms, S, 'lstm1', nh=nh)
+        # class LstmPolicy(MemoryPolicy):
+        #     @staticmethod
+        #     def memory_fn(xs, ms, S, nh):
+        #         return lstm(xs, ms, S, 'lstm1', nh=nh)
 
-    # @staticmethod
-    # def preprocess(X):
-    #     return tf.cast(X, tf.float32)
+        # @staticmethod
+        # def preprocess(X):
+        #     return tf.cast(X, tf.float32)
 
 
 def squash(vector, epsilon=1e-9):
@@ -88,7 +88,7 @@ def squash(vector, epsilon=1e-9):
     return (vec_squashed)
 
 
-def routing(input, b_IJ, batch_size, stddev=1.0, iter_routing=1):
+def routing(input, b_IJ, output_size, stddev=1.0, iter_routing=1):
     """ The routing algorithm.
     Args:
         input: A Tensor with [batch_size, num_caps_l=1152, 1, length(u_i)=8, 1]
@@ -101,12 +101,16 @@ def routing(input, b_IJ, batch_size, stddev=1.0, iter_routing=1):
         v_j the vector output of capsule j in the layer l+1.
      """
 
-    num_caps_l = 1152
-    num_caps_l_plus_1 = 10
-    len_u_i = 8
-    len_v_j = 16
-    assert b_IJ.get_shape() == [batch_size, num_caps_l, num_caps_l_plus_1, 1, 1]
-    assert input.get_shape() == [batch_size, num_caps_l, 1, len_u_i, 1]
+    # num_caps_l = 1152
+    # num_caps_l_plus_1 = 10
+    # len_u_i = 8
+    # len_v_j = 16
+    len_v_j = output_size
+    batch_size, num_caps_l, num_caps_l_plus_1, _, _ = b_IJ.get_shape()
+    len_u_i = input.get_shape()[-1]
+    assert b_IJ.get_shape()[-2:] == [1, 1]
+    assert input.get_shape()[:2] == [batch_size, num_caps_l]
+
     # W: [num_caps_i, num_caps_j, len_u_i, len_v_j]
     W = tf.get_variable('Weight', shape=(1, num_caps_l, num_caps_l_plus_1, len_u_i, len_v_j), dtype=tf.float32,
                         initializer=tf.random_normal_initializer(stddev=stddev))
@@ -115,7 +119,8 @@ def routing(input, b_IJ, batch_size, stddev=1.0, iter_routing=1):
     # do tiling for input and W before matmul
     # input => [batch_size, 1152, 10, 8, 1]
     # W => [batch_size, 1152, 10, 8, 16]
-    input = tf.tile(input, [1, 1, num_caps_l_plus_1, 1, 1])
+    reshaped = tf.reshape(input, [batch_size, num_caps_l, 1, len_u_i, 1])
+    input = tf.tile(reshaped, [1, 1, num_caps_l_plus_1, 1, 1])
     W = tf.tile(W, [batch_size, 1, 1, 1, 1])
     assert input.get_shape() == [batch_size, num_caps_l, num_caps_l_plus_1, len_u_i, 1]
 
@@ -194,12 +199,13 @@ class CapsulesPolicy(object):
             # ms = batch_to_seq(M, nenv, nsteps)
             # h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
             # h5 = seq_to_batch(h5)
-            n_capsules = 2
+            n_capsules = 1
             snew = S
             b_IJ = tf.zeros([nbatch, n_capsules, n_capsules, 1, 1], dtype=np.float32)
             h4 = tf.reshape(h3, shape=[nbatch, 2, X_size])
-            h5 = routing(input=h4, b_IJ=b_IJ, batch_size=nbatch)
-            assert h5.shape == [nbatch, 2, 1, X_size, 1]
+            h5 = routing(input=h4, b_IJ=b_IJ, output_size=X_size)
+            assert h5.shape == [nbatch, 1, 2, X_size, 1], (h5.shape, [nbatch, 1, 2, X_size, 1])
+            h5 = tf.reshape(h5, shape=[nbatch, 2 * X_size])
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
