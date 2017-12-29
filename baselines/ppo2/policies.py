@@ -89,49 +89,51 @@ def squash(vector, epsilon=1e-9):
     return (vec_squashed)
 
 
-def routing(input, b_IJ, output_size, stddev=1.0, iter_routing=1):
+def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
     """ The routing algorithm.
     Args:
-        input: A Tensor with [batch_size, num_caps_l=1152, 1, length(u_i)=8, 1]
-               shape, num_caps_l meaning the number of capsule in the layer l.
+        inputs: A Tensor with [batch_size, num_caps_i=1152, 1, length(u_i)=8, 1]
+               shape, num_caps_i meaning the number of capsule in the layer l.
     Returns:
-        A Tensor of shape [batch_size, num_caps_l_plus_1, length(v_j)=16, 1]
+        A Tensor of shape [batch_size, num_caps_j, length(v_j)=16, 1]
         representing the vector output `v_j` in the layer l+1
     Notes:
         u_i represents the vector output of capsule i in the layer l, and
         v_j the vector output of capsule j in the layer l+1.
      """
 
-    # num_caps_l = 1152
-    # num_caps_l_plus_1 = 10
+    # num_caps_i = 1152
+    # num_caps_j = 10
     # len_u_i = 8
     # len_v_j = 16
     len_v_j = output_size
-    batch_size, num_caps_l, num_caps_l_plus_1, _, _ = b_IJ.get_shape()
-    len_u_i = input.get_shape()[-1]
+    batch_size, num_caps_i, num_caps_j, _, _ = b_IJ.get_shape()
+    len_u_i = inputs.get_shape()[-1]
     assert b_IJ.get_shape()[-2:] == [1, 1]
-    assert input.get_shape()[:2] == [batch_size, num_caps_l]
+    assert inputs.get_shape() == [batch_size, num_caps_i, len_u_i]
 
     # W: [num_caps_i, num_caps_j, len_u_i, len_v_j]
-    W = tf.get_variable('Weight', shape=(1, num_caps_l, num_caps_l_plus_1, len_u_i, len_v_j), dtype=tf.float32,
+    W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
                         initializer=tf.random_normal_initializer(stddev=stddev))
+    assert W.shape == [1, 1, 1, len_u_i, output_size]
 
     # Eq.2, calc u_hat
     # do tiling for input and W before matmul
     # input => [batch_size, 1152, 10, 8, 1]
     # W => [batch_size, 1152, 10, 8, 16]
-    reshaped = tf.reshape(input, [batch_size, num_caps_l, 1, len_u_i, 1])
-    input = tf.tile(reshaped, [1, 1, num_caps_l_plus_1, 1, 1])
+    inputs = tf.reshape(inputs, [batch_size, num_caps_i, 1, len_u_i, 1])
+    inputs = tf.tile(inputs, [1, 1, num_caps_j, 1, 1])
     W = tf.tile(W, [batch_size, 1, 1, 1, 1])
-    assert input.get_shape() == [batch_size, num_caps_l, num_caps_l_plus_1, len_u_i, 1]
+    assert inputs.get_shape() == [batch_size, num_caps_i, num_caps_j, len_u_i, 1]
 
     # in last 2 dims:
     # [8, 16].T x [8, 1] => [16, 1] => [batch_size, 1152, 10, 16, 1]
     # tf.scan, 3 iter, 1080ti, 128 batch size: 10min/epoch
     # u_hat = tf.scan(lambda ac, x: tf.matmul(W, x, transpose_a=True), input, initializer=tf.zeros([1152, 10, 16, 1]))
     # tf.tile, 3 iter, 1080ti, 128 batch size: 6min/epoch
-    u_hat = tf.matmul(W, input, transpose_a=True)
-    assert u_hat.get_shape() == [batch_size, num_caps_l, num_caps_l_plus_1, len_v_j, 1]
+    u_hat = tf.matmul(W, inputs, transpose_a=True)
+    assert u_hat.get_shape() == [batch_size, num_caps_i, num_caps_j, len_v_j, 1]
+    return u_hat
 
     # In forward, u_hat_stopped = u_hat; in backward, no gradient passed back from u_hat_stopped to u_hat
     u_hat_stopped = tf.stop_gradient(u_hat, name='stop_gradient')
@@ -151,12 +153,12 @@ def routing(input, b_IJ, output_size, stddev=1.0, iter_routing=1):
                 s_J = tf.multiply(c_IJ, u_hat)
                 # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
                 s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
-                assert s_J.get_shape() == [batch_size, 1, num_caps_l_plus_1, len_v_j, 1]
+                assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
 
                 # line 6:
                 # squash using Eq.1,
                 v_J = squash(s_J)
-                assert v_J.get_shape() == [batch_size, 1, num_caps_l_plus_1, len_v_j, 1]
+                assert v_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
             elif r_iter < iter_routing - 1:  # Inner iterations, do not apply backpropagation
                 s_J = tf.multiply(c_IJ, u_hat_stopped)
                 s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
@@ -166,9 +168,9 @@ def routing(input, b_IJ, output_size, stddev=1.0, iter_routing=1):
                 # reshape & tile v_j from [batch_size ,1, 10, 16, 1] to [batch_size, 1152, 10, 16, 1]
                 # then matmul in the last tow dim: [16, 1].T x [16, 1] => [1, 1], reduce mean in the
                 # batch_size dim, resulting in [1, 1152, 10, 1, 1]
-                v_J_tiled = tf.tile(v_J, [1, num_caps_l, 1, 1, 1])
+                v_J_tiled = tf.tile(v_J, [1, num_caps_i, 1, 1, 1])
                 u_dot_v = tf.matmul(u_hat_stopped, v_J_tiled, transpose_a=True)
-                assert u_dot_v.get_shape() == [batch_size, num_caps_l, num_caps_l_plus_1, 1, 1]
+                assert u_dot_v.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
 
                 # b_IJ += tf.reduce_sum(u_produce_v, axis=0, keep_dims=True)
                 b_IJ += u_dot_v
@@ -204,7 +206,7 @@ class CapsulesPolicy(object):
             snew = S
             b_IJ = tf.zeros([nbatch, n_capsules, n_capsules, 1, 1], dtype=np.float32)
             h4 = tf.reshape(h3, shape=[nbatch, n_capsules, X_size])
-            h5 = routing(input=h4, b_IJ=b_IJ, output_size=X_size)
+            h5 = routing(inputs=h4, b_IJ=b_IJ, output_size=X_size)
             assert h5.shape == [nbatch, 1, n_capsules, X_size, 1], (h5.shape, [nbatch, 1, n_capsules, X_size, 1])
             h5 = tf.reshape(h5, shape=[nbatch, n_capsules * X_size])
 
