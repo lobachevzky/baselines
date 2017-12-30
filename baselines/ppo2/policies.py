@@ -110,8 +110,8 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=2):
     len_u_i = inputs.get_shape()[-1]
 
     print('iter_routing', iter_routing)
-    print('n_capsules', num_caps_i, num_caps_j)
-    exit()
+    print('n_caps_i', num_caps_i)
+    print('n_caps_j', num_caps_j)
 
     # num_caps_i = 1152
     b_IJ = tf.reshape(b_IJ, [batch_size, num_caps_i, num_caps_j, 1, 1])
