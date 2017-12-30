@@ -111,14 +111,14 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
     len_u_i = inputs.get_shape()[-1]
 
     b_IJ = tf.reshape(b_IJ, [batch_size, num_caps_i, num_caps_j, 1, 1])
-    assert b_IJ.get_shape()[-2:] == [batch_size, num_caps_i, num_caps_j, 1, 1]
+    assert b_IJ.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
     assert inputs.get_shape() == [batch_size, num_caps_i, len_u_i]
 
     # W: [num_caps_i, num_caps_j, len_u_i, len_v_j]
-    # W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
-    #                     initializer=tf.random_normal_initializer(stddev=stddev))
-    W = tf.get_variable('Weight', shape=(len_u_i, len_v_j), dtype=tf.float32,
+    W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
                         initializer=tf.random_normal_initializer(stddev=stddev))
+    # W = tf.get_variable('Weight', shape=(len_u_i, len_v_j), dtype=tf.float32,
+    #                     initializer=tf.random_normal_initializer(stddev=stddev))
     assert W.shape == [1, 1, 1, len_u_i, output_size]
 
     # Eq.2, calc u_hat
@@ -189,15 +189,28 @@ class CapsulesPolicy(object):
             actdim = 1
         else:
             actdim = ac_space.shape[0]
-        X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
+
+        X_size = np.prod(ob_space.shape)
         nenv = nbatch // nsteps
+
+        X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, size_mem * 2], name='S')  # states
         snew = S
 
         with tf.variable_scope("model", reuse=reuse):
-            h1 = fc(X, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
-            h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            n_capsules = 1
+            size = 64
+            h1 = fc(X, 'pi_fc1', nh=n_capsules * size, init_scale=np.sqrt(2), act=tf.tanh)
+
+            b_IJ = tf.zeros([nbatch, n_capsules, n_capsules], dtype=np.float32)
+            h4 = tf.reshape(h1, shape=[nbatch, n_capsules, size])
+            h5 = routing(inputs=h4, b_IJ=b_IJ, output_size=size)
+            assert h5.shape == [nbatch, 1, n_capsules, size, 1]
+            h2 = tf.reshape(h5, shape=[nbatch, n_capsules * size])
+
+            # h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+
             pi = fc(h2, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             h2 = fc(h1, 'vf_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
@@ -255,13 +268,13 @@ class CapsulesPolicy2(object):
             # h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
             # h5 = seq_to_batch(h5)
             snew = S
-            h5 = fc(h3, 'h5', n_capsules * X_size)
+            # h5 = fc(h3, 'h5', n_capsules * X_size)
 
-            # b_IJ = tf.zeros([nbatch, n_capsules, n_capsules], dtype=np.float32)
-            # h4 = tf.reshape(h3, shape=[nbatch, n_capsules, X_size])
-            # h5 = routing(inputs=h4, b_IJ=b_IJ, output_size=X_size)
-            # assert h5.shape == [nbatch, 1, n_capsules, X_size, 1], (h5.shape, [nbatch, 1, n_capsules, X_size, 1])
-            # h5 = tf.reshape(h5, shape=[nbatch, n_capsules * X_size])
+            b_IJ = tf.zeros([nbatch, n_capsules, n_capsules], dtype=np.float32)
+            h4 = tf.reshape(h3, shape=[nbatch, n_capsules, X_size])
+            h5 = routing(inputs=h4, b_IJ=b_IJ, output_size=X_size)
+            assert h5.shape == [nbatch, 1, n_capsules, X_size, 1], (h5.shape, [nbatch, 1, n_capsules, X_size, 1])
+            h5 = tf.reshape(h5, shape=[nbatch, n_capsules * X_size])
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
