@@ -159,32 +159,28 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=2):
                 # => [batch_size, 1152, 10, 16, 1]
                 s_J = tf.multiply(c_IJ, u_hat)
                 # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
-                s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
-                # with tf.control_dependencies([tf.assert_equal(s_J, u_hat)]):
-                assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
-
-                # line 6:
-                # squash using Eq.1,
-                v_J = squash(s_J)
-                assert v_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
+                # s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
+                # assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
+                #
+                # # line 6:
+                # # squash using Eq.1,
+                # v_J = squash(s_J)
+                # assert v_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
             elif r_iter < iter_routing - 1:  # Inner iterations, do not apply backpropagation
-                
-                b_IJ = tf.Print(b_IJ, [b_IJ])
-
                 s_J = tf.multiply(c_IJ, u_hat_stopped)
-                s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
-                v_J = squash(s_J)
+            s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
+            v_J = squash(s_J)
 
-                # line 7:
-                # reshape & tile v_j from [batch_size ,1, 10, 16, 1] to [batch_size, 1152, 10, 16, 1]
-                # then matmul in the last tow dim: [16, 1].T x [16, 1] => [1, 1], reduce mean in the
-                # batch_size dim, resulting in [1, 1152, 10, 1, 1]
-                v_J_tiled = tf.tile(v_J, [1, num_caps_i, 1, 1, 1])
-                u_dot_v = tf.matmul(u_hat_stopped, v_J_tiled, transpose_a=True)
-                assert u_dot_v.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
+            # line 7:
+            # reshape & tile v_j from [batch_size ,1, 10, 16, 1] to [batch_size, 1152, 10, 16, 1]
+            # then matmul in the last tow dim: [16, 1].T x [16, 1] => [1, 1], reduce mean in the
+            # batch_size dim, resulting in [1, 1152, 10, 1, 1]
+            v_J_tiled = tf.tile(v_J, [1, num_caps_i, 1, 1, 1])
+            u_dot_v = tf.matmul(u_hat_stopped, v_J_tiled, transpose_a=True)
+            assert u_dot_v.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
 
-                # b_IJ += tf.reduce_sum(u_produce_v, axis=0, keep_dims=True)
-                b_IJ += u_dot_v
+            # b_IJ += tf.reduce_sum(u_produce_v, axis=0, keep_dims=True)
+            b_IJ += u_dot_v
 
     return v_J
 
