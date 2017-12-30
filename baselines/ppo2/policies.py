@@ -107,13 +107,17 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
     # len_u_i = 8
     # len_v_j = 16
     len_v_j = output_size
-    batch_size, num_caps_i, num_caps_j, _, _ = b_IJ.get_shape()
+    batch_size, num_caps_i, num_caps_j = b_IJ.get_shape()
     len_u_i = inputs.get_shape()[-1]
-    assert b_IJ.get_shape()[-2:] == [1, 1]
+
+    b_IJ = tf.reshape(b_IJ, [batch_size, num_caps_i, num_caps_j, 1, 1])
+    assert b_IJ.get_shape()[-2:] == [batch_size, num_caps_i, num_caps_j, 1, 1]
     assert inputs.get_shape() == [batch_size, num_caps_i, len_u_i]
 
     # W: [num_caps_i, num_caps_j, len_u_i, len_v_j]
-    W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
+    # W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
+    #                     initializer=tf.random_normal_initializer(stddev=stddev))
+    W = tf.get_variable('Weight', shape=(len_u_i, len_v_j), dtype=tf.float32,
                         initializer=tf.random_normal_initializer(stddev=stddev))
     assert W.shape == [1, 1, 1, len_u_i, output_size]
 
@@ -204,11 +208,13 @@ class CapsulesPolicy(object):
             # h5, snew = lstm(xs, ms, S, 'lstm', nh=size_mem)
             # h5 = seq_to_batch(h5)
             snew = S
-            b_IJ = tf.zeros([nbatch, n_capsules, n_capsules, 1, 1], dtype=np.float32)
-            h4 = tf.reshape(h3, shape=[nbatch, n_capsules, X_size])
-            h5 = routing(inputs=h4, b_IJ=b_IJ, output_size=X_size)
-            assert h5.shape == [nbatch, 1, n_capsules, X_size, 1], (h5.shape, [nbatch, 1, n_capsules, X_size, 1])
-            h5 = tf.reshape(h5, shape=[nbatch, n_capsules * X_size])
+            h5 = fc(h3, 'h5', n_capsules * X_size)
+
+            # b_IJ = tf.zeros([nbatch, n_capsules, n_capsules], dtype=np.float32)
+            # h4 = tf.reshape(h3, shape=[nbatch, n_capsules, X_size])
+            # h5 = routing(inputs=h4, b_IJ=b_IJ, output_size=X_size)
+            # assert h5.shape == [nbatch, 1, n_capsules, X_size, 1], (h5.shape, [nbatch, 1, n_capsules, X_size, 1])
+            # h5 = tf.reshape(h5, shape=[nbatch, n_capsules * X_size])
 
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
