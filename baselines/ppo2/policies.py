@@ -190,6 +190,53 @@ class CapsulesPolicy(object):
         else:
             actdim = ac_space.shape[0]
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
+        nenv = nbatch // nsteps
+        M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
+        S = tf.placeholder(tf.float32, [nenv, size_mem * 2], name='S')  # states
+        snew = S
+
+        with tf.variable_scope("model", reuse=reuse):
+            h1 = fc(X, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            pi = fc(h2, 'pi', actdim, act=lambda x: x, init_scale=0.01)
+            h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            h2 = fc(h1, 'vf_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            vf = fc(h2, 'vf', 1, act=lambda x: x)[:, 0]
+            logstd = tf.get_variable(name="logstd", shape=[1, actdim],
+                                     initializer=tf.zeros_initializer())
+
+        pdparam = tf.concat([pi, pi * 0.0 + logstd], axis=1)
+
+        self.pdtype = make_pdtype(ac_space)
+        self.pd = self.pdtype.pdfromflat(pdparam)
+
+        a0 = self.pd.sample()
+        neglogp0 = self.pd.neglogp(a0)
+        self.initial_state = np.zeros((nenv, size_mem * 2), dtype=np.float32)
+
+        def step(ob, state, mask):
+            return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
+
+        def value(ob, state, mask):
+            return sess.run(vf, {X: ob, S: state, M: mask})
+
+        self.X = X
+        self.M = M
+        self.S = S
+        self.pi = pi
+        self.vf = vf
+        self.step = step
+        self.value = value
+
+
+class CapsulesPolicy2(object):
+    def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, size_mem=256, reuse=False):  # pylint: disable=W0613
+        ob_shape = (nbatch,) + ob_space.shape
+        if ac_space.shape == ():
+            actdim = 1
+        else:
+            actdim = ac_space.shape[0]
+        X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
 
         nenv = nbatch // nsteps
         M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
