@@ -102,7 +102,6 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=2):
         v_j the vector output of capsule j in the layer l+1.
      """
 
-    # num_caps_i = 1152
     # num_caps_j = 10
     # len_u_i = 8
     # len_v_j = 16
@@ -110,6 +109,11 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=2):
     batch_size, num_caps_i, num_caps_j = b_IJ.get_shape()
     len_u_i = inputs.get_shape()[-1]
 
+    print('iter_routing', iter_routing)
+    print('n_capsules', num_caps_i, num_caps_j)
+    exit()
+
+    # num_caps_i = 1152
     b_IJ = tf.reshape(b_IJ, [batch_size, num_caps_i, num_caps_j, 1, 1])
     assert b_IJ.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
     assert inputs.get_shape() == [batch_size, num_caps_i, len_u_i]
