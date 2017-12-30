@@ -89,7 +89,7 @@ def squash(vector, epsilon=1e-9):
     return (vec_squashed)
 
 
-def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
+def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=2):
     """ The routing algorithm.
     Args:
         inputs: A Tensor with [batch_size, num_caps_i=1152, 1, length(u_i)=8, 1]
@@ -190,7 +190,6 @@ class CapsulesPolicy(object):
         else:
             actdim = ac_space.shape[0]
 
-        X_size = np.prod(ob_space.shape)
         nenv = nbatch // nsteps
 
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
