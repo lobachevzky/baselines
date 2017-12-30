@@ -147,25 +147,8 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
 
 
 
-
-
-
-
-
-    # line 4:
-    # => [batch_size, 1152, 10, 1, 1]
-    c_IJ = tf.nn.softmax(b_IJ, dim=2)
-
-    # line 5:
-    # weighting u_hat with c_IJ, element-wise in the last two dims
-    # => [batch_size, 1152, 10, 16, 1]
-    one_iter = iter_routing == 1
-    # At last iteration, use `u_hat` in order to receive gradients from the following graph
-    # Inner iterations, do not apply backpropagation
-    s_J = tf.multiply(c_IJ, u_hat if one_iter else u_hat_stopped)
-
     # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
-    s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
+    s_J = tf.reduce_mean(u_hat, axis=1, keep_dims=True)
     assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
 
     # line 6:
