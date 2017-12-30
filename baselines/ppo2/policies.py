@@ -157,7 +157,7 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=2):
                 # line 5:
                 # weighting u_hat with c_IJ, element-wise in the last two dims
                 # => [batch_size, 1152, 10, 16, 1]
-                s_J = tf.multiply(c_IJ, u_hat)
+                s_J = tf.multiply(c_IJ, u_hat_stopped)
                 # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
                 # s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
                 # assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
