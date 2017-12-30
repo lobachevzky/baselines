@@ -125,6 +125,16 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
     u_hat_stopped = tf.stop_gradient(u_hat, name='stop_gradient')
 
 
+    # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
+    s_J = tf.reduce_mean(u_hat, axis=1, keep_dims=True)
+    assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
+
+    # line 6:
+    # squash using Eq.1,
+    v_J = squash(s_J)
+    assert v_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
+
+
 
     # line 3,for r iterations do
     for r_iter in range(iter_routing):
