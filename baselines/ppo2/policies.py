@@ -85,8 +85,8 @@ def squash(vector, epsilon=1e-9):
     """
     vec_squared_norm = tf.reduce_sum(tf.square(vector), -2, keep_dims=True)
     scalar_factor = vec_squared_norm / (1 + vec_squared_norm) / tf.sqrt(vec_squared_norm + epsilon)
-    vec_squashed = scalar_factor * vector  # element-wise
-    return (vec_squashed)
+    # element-wise
+    return scalar_factor * vector
 
 
 def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=2):
@@ -168,6 +168,9 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=2):
                 v_J = squash(s_J)
                 assert v_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
             elif r_iter < iter_routing - 1:  # Inner iterations, do not apply backpropagation
+                
+                b_IJ = tf.Print(b_IJ, [b_IJ])
+
                 s_J = tf.multiply(c_IJ, u_hat_stopped)
                 s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
                 v_J = squash(s_J)
