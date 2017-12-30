@@ -137,7 +137,6 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
     # tf.tile, 3 iter, 1080ti, 128 batch size: 6min/epoch
     u_hat = tf.matmul(W, inputs, transpose_a=True)
     assert u_hat.get_shape() == [batch_size, num_caps_i, num_caps_j, len_v_j, 1]
-    return u_hat
 
     # In forward, u_hat_stopped = u_hat; in backward, no gradient passed back from u_hat_stopped to u_hat
     u_hat_stopped = tf.stop_gradient(u_hat, name='stop_gradient')
