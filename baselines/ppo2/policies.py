@@ -118,45 +118,11 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
     assert b_IJ.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
     assert inputs.get_shape() == [batch_size, num_caps_i, len_u_i]
 
-    # W: [num_caps_i, num_caps_j, len_u_i, len_v_j]
-    W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
-                        initializer=tf.random_normal_initializer(stddev=stddev))
-    # W = tf.get_variable('Weight', shape=(len_u_i, len_v_j), dtype=tf.float32,
-    #                     initializer=tf.random_normal_initializer(stddev=stddev))
-    assert W.shape == [1, num_caps_i, num_caps_j, len_u_i, output_size]
-
-    # Eq.2, calc u_hat
-    # do tiling for input and W before matmul
-    # input => [batch_size, 1152, 10, 8, 1]
-    # W => [batch_size, 1152, 10, 8, 16]
-    inputs = tf.reshape(inputs, [batch_size, num_caps_i, 1, len_u_i, 1])
-    inputs = tf.tile(inputs, [1, 1, num_caps_j, 1, 1])
-    W = tf.tile(W, [batch_size, 1, 1, 1, 1])
-    assert inputs.get_shape() == [batch_size, num_caps_i, num_caps_j, len_u_i, 1]
-
-    # in last 2 dims:
-    # [8, 16].T x [8, 1] => [16, 1] => [batch_size, 1152, 10, 16, 1]
-    # tf.scan, 3 iter, 1080ti, 128 batch size: 10min/epoch
-    # u_hat = tf.scan(lambda ac, x: tf.matmul(W, x, transpose_a=True), input, initializer=tf.zeros([1152, 10, 16, 1]))
-    # tf.tile, 3 iter, 1080ti, 128 batch size: 6min/epoch
-    u_hat = tf.matmul(W, inputs, transpose_a=True)
+    u_hat = get_u_hat(inputs, num_caps_j, output_size, stddev)
     assert u_hat.get_shape() == [batch_size, num_caps_i, num_caps_j, len_v_j, 1]
 
     # In forward, u_hat_stopped = u_hat; in backward, no gradient passed back from u_hat_stopped to u_hat
     u_hat_stopped = tf.stop_gradient(u_hat, name='stop_gradient')
-
-
-
-    # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
-    s_J = tf.reduce_mean(u_hat, axis=1, keep_dims=True)
-    assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
-
-    # line 6:
-    # squash using Eq.1,
-    v_J = squash(s_J)
-    assert v_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
-
-
 
 
 
@@ -197,6 +163,33 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
             assert v_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
 
     return v_J
+
+
+def get_u_hat(inputs, num_caps_j, output_size, stddev=1.0):
+
+    len_v_j = output_size
+    [batch_size, num_caps_i, len_u_i] = inputs.get_shape()
+    # W: [num_caps_i, num_caps_j, len_u_i, len_v_j]
+    W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
+                        initializer=tf.random_normal_initializer(stddev=stddev))
+    # W = tf.get_variable('Weight', shape=(len_u_i, len_v_j), dtype=tf.float32,
+    #                     initializer=tf.random_normal_initializer(stddev=stddev))
+    assert W.shape == [1, num_caps_i, num_caps_j, len_u_i, output_size]
+    # Eq.2, calc u_hat
+    # do tiling for input and W before matmul
+    # input => [batch_size, 1152, 10, 8, 1]
+    # W => [batch_size, 1152, 10, 8, 16]
+    inputs = tf.reshape(inputs, [batch_size, num_caps_i, 1, len_u_i, 1])
+    inputs = tf.tile(inputs, [1, 1, num_caps_j, 1, 1])
+    W = tf.tile(W, [batch_size, 1, 1, 1, 1])
+    assert inputs.get_shape() == [batch_size, num_caps_i, num_caps_j, len_u_i, 1]
+    # in last 2 dims:
+    # [8, 16].T x [8, 1] => [16, 1] => [batch_size, 1152, 10, 16, 1]
+    # tf.scan, 3 iter, 1080ti, 128 batch size: 10min/epoch
+    # u_hat = tf.scan(lambda ac, x: tf.matmul(W, x, transpose_a=True), input, initializer=tf.zeros([1152, 10, 16, 1]))
+    # tf.tile, 3 iter, 1080ti, 128 batch size: 6min/epoch
+    u_hat = tf.matmul(W, inputs, transpose_a=True)
+    return u_hat
 
 
 class CapsulesPolicy(object):
