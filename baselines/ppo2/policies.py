@@ -119,7 +119,7 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
                         initializer=tf.random_normal_initializer(stddev=stddev))
     # W = tf.get_variable('Weight', shape=(len_u_i, len_v_j), dtype=tf.float32,
     #                     initializer=tf.random_normal_initializer(stddev=stddev))
-    assert W.shape == [1, 1, 1, len_u_i, output_size]
+    assert W.shape == [1, num_caps_i, num_caps_j, len_u_i, output_size]
 
     # Eq.2, calc u_hat
     # do tiling for input and W before matmul
@@ -156,6 +156,7 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
                 s_J = tf.multiply(c_IJ, u_hat)
                 # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
                 s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
+                # with tf.control_dependencies([tf.assert_equal(s_J, u_hat)]):
                 assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
 
                 # line 6:
@@ -198,7 +199,7 @@ class CapsulesPolicy(object):
         snew = S
 
         with tf.variable_scope("model", reuse=reuse):
-            n_capsules = 1
+            n_capsules = 2
             size = 64
             h1 = fc(X, 'pi_fc1', nh=n_capsules * size, init_scale=np.sqrt(2), act=tf.tanh)
 
@@ -260,7 +261,7 @@ class CapsulesPolicy2(object):
 
             X_size = np.prod(ob_space.shape)
             h2 = tf.reshape(X, shape=[nbatch, X_size])
-            n_capsules = 1
+            n_capsules = 2
             h3 = fc(h2, 'h3', n_capsules * X_size)
             # xs = batch_to_seq(h2, nenv, nsteps)
             # ms = batch_to_seq(M, nenv, nsteps)
