@@ -123,23 +123,19 @@ class CapsulesPolicy(object):
         snew = S
 
         with tf.variable_scope("model", reuse=reuse):
-            h1 = fc(X, 'pi_fc1', nh=n_capsules * size_mem, init_scale=np.sqrt(2), act=tf.tanh)
+            h1 = fc(X, 'fc1', nh=n_capsules * size_mem, init_scale=np.sqrt(2), act=tf.tanh)
 
             h2 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
             h3 = routing(inputs=h2, prior=S, output_size=size_mem, num_caps_j=2, scope='pi')
             assert h3.shape == [nbatch, 1, n_capsules, size_mem, 1]
             h4 = tf.reshape(h3, shape=[nbatch, n_capsules * size_mem])
 
-            pi = fc(h4, 'pi', actdim, act=lambda x: x, init_scale=0.01)
-            h1 = fc(X, 'vf_fc1', nh=n_capsules * size_mem, init_scale=np.sqrt(2), act=tf.tanh)
+            h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
+            pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
 
-            # h4 = fc(h1, 'vf_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
-            h2 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
-            h3 = routing(inputs=h2, prior=S, output_size=size_mem, num_caps_j=2, scope='vf')
-            assert h3.shape == [nbatch, 1, n_capsules, size_mem, 1]
-            h4 = tf.reshape(h3, shape=[nbatch, n_capsules * size_mem])
+            h5 = fc(h4, 'vf_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
+            vf = fc(h5, 'vf', 1, act=lambda x: x)[:, 0]
 
-            vf = fc(h4, 'vf', 1, act=lambda x: x)[:, 0]
             logstd = tf.get_variable(name="logstd", shape=[1, actdim],
                                      initializer=tf.zeros_initializer())
 
