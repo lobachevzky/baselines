@@ -89,7 +89,7 @@ def squash(vector, epsilon=1e-9):
     return scalar_factor * vector
 
 
-def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
+def routing(inputs, v_J, output_size, stddev=1.0, iter_routing=1, num_caps_j=2):
     """ The routing algorithm.
     Args:
         inputs: A Tensor with [batch_size, num_caps_i=1152, 1, length(u_i)=8, 1]
@@ -106,15 +106,14 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
     # len_u_i = 8
     # len_v_j = 16
     len_v_j = output_size
-    batch_size, num_caps_i, num_caps_j = b_IJ.get_shape()
-    len_u_i = inputs.get_shape()[-1]
+    [batch_size, num_caps_i, len_u_i] = inputs.get_shape()
 
     print('iter_routing', iter_routing)
     print('n_caps_i', num_caps_i)
     print('n_caps_j', num_caps_j)
 
     # num_caps_i = 1152
-    b_IJ = tf.reshape(b_IJ, [batch_size, num_caps_i, num_caps_j, 1, 1])
+    b_IJ = tf.zeros([batch_size, num_caps_i, num_caps_j, 1, 1])
     assert b_IJ.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
     assert inputs.get_shape() == [batch_size, num_caps_i, len_u_i]
 
@@ -123,17 +122,6 @@ def routing(inputs, b_IJ, output_size, stddev=1.0, iter_routing=1):
 
     # In forward, u_hat_stopped = u_hat; in backward, no gradient passed back from u_hat_stopped to u_hat
     u_hat_stopped = tf.stop_gradient(u_hat, name='stop_gradient')
-
-
-    # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
-    s_J = tf.reduce_mean(u_hat, axis=1, keep_dims=True)
-    assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
-
-    # line 6:
-    # squash using Eq.1,
-    v_J = squash(s_J)
-    assert v_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
-
 
 
     # line 3,for r iterations do
@@ -222,9 +210,17 @@ class CapsulesPolicy(object):
             size = 64
             h1 = fc(X, 'pi_fc1', nh=n_capsules * size, init_scale=np.sqrt(2), act=tf.tanh)
 
-            b_IJ = tf.zeros([nbatch, n_capsules, n_capsules], dtype=np.float32)
             h4 = tf.reshape(h1, shape=[nbatch, n_capsules, size])
-            h5 = routing(inputs=h4, b_IJ=b_IJ, output_size=size)
+
+            with tf.variable_scope("routing", reuse=False):
+                u_hat = get_u_hat(h4, 2, size)
+            # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
+            s_J = tf.reduce_mean(u_hat, axis=1, keep_dims=True)
+            # line 6:
+            # squash using Eq.1,
+            v_J = squash(s_J)
+            with tf.variable_scope("routing", reuse=True):
+                h5 = routing(inputs=h4, v_J=v_J, output_size=size)
             assert h5.shape == [nbatch, 1, n_capsules, size, 1]
             h2 = tf.reshape(h5, shape=[nbatch, n_capsules * size])
 
