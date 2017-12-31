@@ -107,6 +107,8 @@ def routing(inputs, v_J, output_size, stddev=1.0, iter_routing=1, num_caps_j=2):
     # len_v_j = 16
     len_v_j = output_size
     [batch_size, num_caps_i, len_u_i] = inputs.get_shape()
+    nenv = v_J.shape[0]
+    nsteps = batch_size // nenv
 
     print('iter_routing', iter_routing)
     print('n_caps_i', num_caps_i)
@@ -117,6 +119,7 @@ def routing(inputs, v_J, output_size, stddev=1.0, iter_routing=1, num_caps_j=2):
     u_hat = get_u_hat(inputs, num_caps_j, output_size, stddev)
 
     assert inputs.shape == [batch_size, num_caps_i, len_u_i]
+    assert v_J.shape == [nenv, 1, num_caps_j, output_size, 1]
     assert b_IJ.shape == [batch_size, num_caps_i, num_caps_j, 1, 1]
     assert u_hat.shape == [batch_size, num_caps_i, num_caps_j, len_v_j, 1]
 
@@ -132,7 +135,7 @@ def routing(inputs, v_J, output_size, stddev=1.0, iter_routing=1, num_caps_j=2):
             # reshape & tile v_j from [batch_size ,1, 10, 16, 1] to [batch_size, 1152, 10, 16, 1]
             # then matmul in the last tow dim: [16, 1].T x [16, 1] => [1, 1], reduce mean in the
             # batch_size dim, resulting in [1, 1152, 10, 1, 1]
-            v_J_tiled = tf.tile(v_J, [batch_size, num_caps_i, 1, 1, 1])
+            v_J_tiled = tf.tile(v_J, [nsteps, num_caps_i, 1, 1, 1])
             u_dot_v = tf.matmul(u_hat_stopped, v_J_tiled, transpose_a=True)
             assert u_dot_v.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
 
@@ -214,14 +217,14 @@ class CapsulesPolicy(object):
                 assert u_hat.shape == [nbatch, n_capsules, n_capsules, size_mem, 1], \
                     (u_hat.shape, [nbatch, n_capsules, n_capsules, size_mem, 1])
             # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
-            s_J = tf.reduce_mean(u_hat, axis=[0, 1], keep_dims=True)
-            assert s_J.shape == [1, 1, n_capsules, size_mem, 1]
+            s_J = tf.reduce_mean(u_hat, axis=1, keep_dims=True)
+            # assert s_J.shape == [nenv, 1, n_capsules, size_mem, 1]
             assert S.shape == [nenv, 1, n_capsules, size_mem, 1]
             # line 6:
             # squash using Eq.1,
             v_J = squash(s_J)
             with tf.variable_scope("routing", reuse=True):
-                h5 = routing(inputs=h4, v_J=v_J, output_size=size_mem)
+                h5 = routing(inputs=h4, v_J=S, output_size=size_mem)
             assert h5.shape == [nbatch, 1, n_capsules, size_mem, 1]
             h2 = tf.reshape(h5, shape=[nbatch, n_capsules * size_mem])
 
