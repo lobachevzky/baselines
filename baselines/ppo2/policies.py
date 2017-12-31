@@ -114,10 +114,10 @@ def routing(inputs, v_J, output_size, stddev=1.0, iter_routing=1, num_caps_j=2):
 
     # num_caps_i = 1152
     b_IJ = tf.zeros([batch_size, num_caps_i, num_caps_j, 1, 1])
+    u_hat = get_u_hat(inputs, num_caps_j, output_size, stddev)
+
     assert b_IJ.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
     assert inputs.get_shape() == [batch_size, num_caps_i, len_u_i]
-
-    u_hat = get_u_hat(inputs, num_caps_j, output_size, stddev)
     assert u_hat.get_shape() == [batch_size, num_caps_i, num_caps_j, len_v_j, 1]
 
     # In forward, u_hat_stopped = u_hat; in backward, no gradient passed back from u_hat_stopped to u_hat
@@ -164,7 +164,6 @@ def routing(inputs, v_J, output_size, stddev=1.0, iter_routing=1, num_caps_j=2):
 
 
 def get_u_hat(inputs, num_caps_j, output_size, stddev=1.0):
-
     len_v_j = output_size
     [batch_size, num_caps_i, len_u_i] = inputs.get_shape()
     # W: [num_caps_i, num_caps_j, len_u_i, len_v_j]
@@ -199,15 +198,15 @@ class CapsulesPolicy(object):
             actdim = ac_space.shape[0]
 
         nenv = nbatch // nsteps
+        n_capsules = 2
+        size = 64
 
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, size_mem * 2], name='S')  # states
+        S = tf.placeholder(tf.float32, [nenv, 1, n_capsules, size, 1], name='S')  # states
         snew = S
 
         with tf.variable_scope("model", reuse=reuse):
-            n_capsules = 2
-            size = 64
             h1 = fc(X, 'pi_fc1', nh=n_capsules * size, init_scale=np.sqrt(2), act=tf.tanh)
 
             h4 = tf.reshape(h1, shape=[nbatch, n_capsules, size])
@@ -240,7 +239,7 @@ class CapsulesPolicy(object):
 
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        self.initial_state = np.zeros((nenv, size_mem * 2), dtype=np.float32)
+        self.initial_state = np.zeros([nenv, 1, n_capsules, size, 1], dtype=np.float32)
 
         def step(ob, state, mask):
             return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
