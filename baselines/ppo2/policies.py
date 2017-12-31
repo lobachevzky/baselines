@@ -190,7 +190,7 @@ def get_u_hat(inputs, num_caps_j, output_size, stddev=1.0):
 
 
 class CapsulesPolicy(object):
-    def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, size_mem=256, reuse=False):  # pylint: disable=W0613
+    def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, size_mem=64, reuse=False):  # pylint: disable=W0613
         ob_shape = (nbatch,) + ob_space.shape
         if ac_space.shape == ():
             actdim = 1
@@ -199,29 +199,31 @@ class CapsulesPolicy(object):
 
         nenv = nbatch // nsteps
         n_capsules = 2
-        size = 64
-
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, 1, n_capsules, size, 1], name='S')  # states
+        S = tf.placeholder(tf.float32, [nenv, 1, n_capsules, size_mem, 1], name='S')  # states
         snew = S
 
         with tf.variable_scope("model", reuse=reuse):
-            h1 = fc(X, 'pi_fc1', nh=n_capsules * size, init_scale=np.sqrt(2), act=tf.tanh)
+            h1 = fc(X, 'pi_fc1', nh=n_capsules * size_mem, init_scale=np.sqrt(2), act=tf.tanh)
 
-            h4 = tf.reshape(h1, shape=[nbatch, n_capsules, size])
+            h4 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
 
             with tf.variable_scope("routing", reuse=False):
-                u_hat = get_u_hat(h4, 2, size)
+                u_hat = get_u_hat(h4, n_capsules, size_mem)
+                assert u_hat.shape == [nbatch, n_capsules, n_capsules, size_mem, 1], \
+                    (u_hat.shape, [nbatch, n_capsules, n_capsules, size_mem, 1])
             # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
             s_J = tf.reduce_mean(u_hat, axis=1, keep_dims=True)
+            assert s_J.shape == [nbatch, 1, n_capsules, size_mem, 1]
+            assert S.shape == [nenv, 1, n_capsules, size_mem, 1]
             # line 6:
             # squash using Eq.1,
             v_J = squash(s_J)
             with tf.variable_scope("routing", reuse=True):
-                h5 = routing(inputs=h4, v_J=v_J, output_size=size)
-            assert h5.shape == [nbatch, 1, n_capsules, size, 1]
-            h2 = tf.reshape(h5, shape=[nbatch, n_capsules * size])
+                h5 = routing(inputs=h4, v_J=v_J, output_size=size_mem)
+            assert h5.shape == [nbatch, 1, n_capsules, size_mem, 1]
+            h2 = tf.reshape(h5, shape=[nbatch, n_capsules * size_mem])
 
             # h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
 
@@ -239,7 +241,7 @@ class CapsulesPolicy(object):
 
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        self.initial_state = np.zeros([nenv, 1, n_capsules, size, 1], dtype=np.float32)
+        self.initial_state = np.zeros([nenv, 1, n_capsules, size_mem, 1], dtype=np.float32)
 
         def step(ob, state, mask):
             return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
