@@ -118,7 +118,7 @@ class CapsulesPolicy(object):
             actdim = ac_space.shape[0]
 
         nenv = nbatch // nsteps
-        n_capsules = 2
+        n_capsules = 1
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, 1, n_capsules, size_mem, 1], name='S')  # states
@@ -129,7 +129,7 @@ class CapsulesPolicy(object):
 
             h2 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
 
-            h3 = routing(inputs=h2, prior=S, output_size=size_mem)
+            h3 = routing(inputs=h2, prior=S, output_size=size_mem, num_caps_j=n_capsules)
             assert h3.shape == [nbatch, 1, n_capsules, size_mem, 1]
             h4 = tf.reshape(h3, shape=[nbatch, n_capsules * size_mem])
 
