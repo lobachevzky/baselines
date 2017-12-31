@@ -118,7 +118,7 @@ class CapsulesPolicy(object):
             actdim = ac_space.shape[0]
 
         nenv = nbatch // nsteps
-        n_capsules = 1
+        n_capsules = 2
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, 1, n_capsules, size_mem, 1], name='S')  # states
