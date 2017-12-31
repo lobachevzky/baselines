@@ -19,7 +19,7 @@ def squash(vector, epsilon=1e-9):
     return scalar_factor * vector
 
 
-def routing(inputs, prior, output_size, stddev=1.0, iter_routing=1, num_caps_j=2):
+def routing(inputs, prior, output_size, num_caps_j, scope, stddev=1.0, iter_routing=1):
     """ The routing algorithm.
     Args:
         inputs: A Tensor with [batch_size, num_caps_i=1152, 1, length(u_i)=8, 1]
@@ -30,6 +30,7 @@ def routing(inputs, prior, output_size, stddev=1.0, iter_routing=1, num_caps_j=2
     Notes:
         u_i represents the vector output of capsule i in the layer l, and
         v_j the vector output of capsule j in the layer l+1.
+        :param scope:
      """
 
     v_J = prior
@@ -38,7 +39,7 @@ def routing(inputs, prior, output_size, stddev=1.0, iter_routing=1, num_caps_j=2
     nsteps = batch_size // nenv
 
     b_IJ = tf.zeros([batch_size, num_caps_i, num_caps_j, 1, 1])
-    u_hat = get_u_hat(inputs, num_caps_j, output_size, stddev)
+    u_hat = get_u_hat(inputs, num_caps_j, output_size, scope, stddev)
 
     assert inputs.shape == [batch_size, num_caps_i, len_u_i]
     assert v_J.shape == [nenv, 1, num_caps_j, output_size, 1]
@@ -83,12 +84,13 @@ def routing(inputs, prior, output_size, stddev=1.0, iter_routing=1, num_caps_j=2
     return v_J
 
 
-def get_u_hat(inputs, num_caps_j, output_size, stddev=1.0):
+def get_u_hat(inputs, num_caps_j, output_size, scope, stddev=1.0):
     len_v_j = output_size
     [batch_size, num_caps_i, len_u_i] = inputs.get_shape()
     # W: [num_caps_i, num_caps_j, len_u_i, len_v_j]
-    W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
-                        initializer=tf.random_normal_initializer(stddev=stddev))
+    with tf.variable_scope(scope):
+        W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
+                            initializer=tf.random_normal_initializer(stddev=stddev))
     # W = tf.get_variable('Weight', shape=(len_u_i, len_v_j), dtype=tf.float32,
     #                     initializer=tf.random_normal_initializer(stddev=stddev))
     assert W.shape == [1, num_caps_i, num_caps_j, len_u_i, output_size]
@@ -134,7 +136,7 @@ class CapsulesPolicy(object):
 
             # h4 = fc(h1, 'vf_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             h2 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
-            h3 = routing(inputs=h2, prior=S, output_size=size_mem)
+            h3 = routing(inputs=h2, prior=S, output_size=size_mem, num_caps_j=2, scope='vf')
             assert h3.shape == [nbatch, 1, n_capsules, size_mem, 1]
             h4 = tf.reshape(h3, shape=[nbatch, n_capsules * size_mem])
 
