@@ -116,9 +116,9 @@ def routing(inputs, v_J, output_size, stddev=1.0, iter_routing=1, num_caps_j=2):
     b_IJ = tf.zeros([batch_size, num_caps_i, num_caps_j, 1, 1])
     u_hat = get_u_hat(inputs, num_caps_j, output_size, stddev)
 
-    assert b_IJ.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
-    assert inputs.get_shape() == [batch_size, num_caps_i, len_u_i]
-    assert u_hat.get_shape() == [batch_size, num_caps_i, num_caps_j, len_v_j, 1]
+    assert inputs.shape == [batch_size, num_caps_i, len_u_i]
+    assert b_IJ.shape == [batch_size, num_caps_i, num_caps_j, 1, 1]
+    assert u_hat.shape == [batch_size, num_caps_i, num_caps_j, len_v_j, 1]
 
     # In forward, u_hat_stopped = u_hat; in backward, no gradient passed back from u_hat_stopped to u_hat
     u_hat_stopped = tf.stop_gradient(u_hat, name='stop_gradient')
@@ -132,7 +132,7 @@ def routing(inputs, v_J, output_size, stddev=1.0, iter_routing=1, num_caps_j=2):
             # reshape & tile v_j from [batch_size ,1, 10, 16, 1] to [batch_size, 1152, 10, 16, 1]
             # then matmul in the last tow dim: [16, 1].T x [16, 1] => [1, 1], reduce mean in the
             # batch_size dim, resulting in [1, 1152, 10, 1, 1]
-            v_J_tiled = tf.tile(v_J, [1, num_caps_i, 1, 1, 1])
+            v_J_tiled = tf.tile(v_J, [batch_size, num_caps_i, 1, 1, 1])
             u_dot_v = tf.matmul(u_hat_stopped, v_J_tiled, transpose_a=True)
             assert u_dot_v.get_shape() == [batch_size, num_caps_i, num_caps_j, 1, 1]
 
@@ -214,8 +214,8 @@ class CapsulesPolicy(object):
                 assert u_hat.shape == [nbatch, n_capsules, n_capsules, size_mem, 1], \
                     (u_hat.shape, [nbatch, n_capsules, n_capsules, size_mem, 1])
             # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
-            s_J = tf.reduce_mean(u_hat, axis=1, keep_dims=True)
-            assert s_J.shape == [nbatch, 1, n_capsules, size_mem, 1]
+            s_J = tf.reduce_mean(u_hat, axis=[0, 1], keep_dims=True)
+            assert s_J.shape == [1, 1, n_capsules, size_mem, 1]
             assert S.shape == [nenv, 1, n_capsules, size_mem, 1]
             # line 6:
             # squash using Eq.1,
