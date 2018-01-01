@@ -116,9 +116,9 @@ def lstm(inputs, c, h, nbatch, nsteps, size_in, size_out):
     assert inputs.shape == [nbatch * nsteps, size_in]
     assert c.shape == [nbatch, size_out]
     assert h.shape == [nbatch, size_out]
+    cell = LSTMCell(size_out)
     inputs = tf.reshape(inputs, [nbatch, nsteps, size_out])
     state_in = LSTMStateTuple(c, h)
-    cell = LSTMCell(size_out)
     outputs, state_out = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32,
                                            initial_state=state_in)
     assert outputs.shape == [nbatch, nsteps, size_out]
@@ -300,17 +300,18 @@ class CnnPolicy(object):
 
 class MlpPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, reuse=False):  # pylint: disable=W0613
+        actdim = 1 if ac_space.shape == () else ac_space.shape[0]
         ob_shape = (nbatch,) + ob_space.shape
-        if ac_space.shape == ():
-            actdim = 1
-        else:
-            actdim = ac_space.shape[0]
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         with tf.variable_scope("model", reuse=reuse):
-            h1 = fc(X, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            if ob_space.shape == ():
+                h0 = tf.reshape(X, [nbatch, 1])
+            else:
+                h0 = X
+            h1 = fc(h0, 'pi_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             h2 = fc(h1, 'pi_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             pi = fc(h2, 'pi', actdim, act=lambda x: x, init_scale=0.01)
-            h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
+            h1 = fc(h0, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             h2 = fc(h1, 'vf_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             vf = fc(h2, 'vf', 1, act=lambda x: x)[:, 0]
             logstd = tf.get_variable(name="logstd", shape=[1, actdim],

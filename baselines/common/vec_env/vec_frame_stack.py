@@ -13,10 +13,15 @@ class VecFrameStack(VecEnv):
         self.venv = venv
         self.nstack = nstack
         wos = venv.observation_space  # wrapped ob space
-        low = np.repeat(wos.low, self.nstack, axis=-1)
-        high = np.repeat(wos.high, self.nstack, axis=-1)
-        self.stackedobs = np.zeros((venv.num_envs,) + low.shape, low.dtype)
-        self._observation_space = spaces.Box(low=low, high=high)
+        if isinstance(wos, spaces.Box):
+            low = np.repeat(wos.low, self.nstack, axis=-1)
+            high = np.repeat(wos.high, self.nstack, axis=-1)
+            self.stackedobs = np.zeros((venv.num_envs,) + low.shape, low.dtype)
+            self._observation_space = spaces.Box(low=low, high=high)
+        elif isinstance(wos, spaces.Discrete):
+            self._observation_space = spaces.Discrete(wos.n * self.nstack)
+            self.stackedobs = np.zeros(venv.num_envs)
+
         self._action_space = venv.action_space
 
     def step(self, vac):
