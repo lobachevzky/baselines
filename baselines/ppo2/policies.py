@@ -19,7 +19,9 @@ def squash(vector, epsilon=1e-9):
     return scalar_factor * vector
 
 
-def routing(inputs, prior, output_size, num_caps_j, scope, stddev=1.0, iter_routing=1):
+def routing(inputs, prior,
+            output_size, num_caps_j,
+            scope, stddev=1.0, iter_routing=1):
     """ The routing algorithm.
     Args:
         inputs: A Tensor with [batch_size, num_caps_i=1152, 1, length(u_i)=8, 1]
@@ -35,8 +37,6 @@ def routing(inputs, prior, output_size, num_caps_j, scope, stddev=1.0, iter_rout
 
     v_J = prior
     [batch_size, num_caps_i, len_u_i] = inputs.get_shape()
-    nenv = v_J.shape[0]
-    nsteps = batch_size // nenv
 
     b_IJ = tf.zeros([batch_size, num_caps_i, num_caps_j, 1, 1])
 
@@ -64,7 +64,7 @@ def routing(inputs, prior, output_size, num_caps_j, scope, stddev=1.0, iter_rout
     u_hat = tf.matmul(W, inputs, transpose_a=True)
 
     assert inputs.get_shape() == [batch_size, num_caps_i, num_caps_j, len_u_i, 1]
-    assert v_J.shape == [nenv, 1, num_caps_j, output_size, 1]
+    assert v_J.shape == [batch_size, 1, num_caps_j, output_size, 1]
     assert b_IJ.shape == [batch_size, num_caps_i, num_caps_j, 1, 1]
     assert u_hat.shape == [batch_size, num_caps_i, num_caps_j, (output_size), 1]
 
@@ -78,7 +78,7 @@ def routing(inputs, prior, output_size, num_caps_j, scope, stddev=1.0, iter_rout
             # reshape & tile v_j from [batch_size ,1, 10, 16, 1] to [batch_size, 1152, 10, 16, 1]
             # then matmul in the last tow dim: [16, 1].T x [16, 1] => [1, 1], reduce mean in the
             # batch_size dim, resulting in [1, 1152, 10, 1, 1]
-            v_J_tiled = tf.tile(v_J, [nsteps, num_caps_i, 1, 1, 1])
+            v_J_tiled = tf.tile(v_J, [1, num_caps_i, 1, 1, 1])
             b_IJ += tf.matmul(u_hat_stopped, v_J_tiled, transpose_a=True)
 
             # line 4:
@@ -130,7 +130,8 @@ class CapsulesPolicy(object):
             h2 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
 
             prior = tf.reshape(state_tuple.c, [nenv, 1, n_capsules, size_mem, 1])
-            assert prior.shape == [nenv, 1, n_capsules, size_mem, 1]
+            prior = tf.tile(prior, [nsteps, 1, 1, 1, 1])
+            assert prior.shape == [nbatch, 1, n_capsules, size_mem, 1]
             h3 = routing(inputs=h2, prior=prior, output_size=size_mem, num_caps_j=2, scope='pi')
             assert h3.shape == [nbatch, 1, n_capsules, size_mem, 1]
             h4 = tf.reshape(h3, [nenv, nsteps, n_capsules * size_mem])
