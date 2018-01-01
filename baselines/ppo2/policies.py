@@ -100,6 +100,16 @@ def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
 
     return tf.reshape(v_J, [batch_size, num_caps_j, len_v_j])
 
+def cluster(inputs, centroids, n_clusters, batch_size, nsteps, size):
+    assert inputs.shape == [batch_size, n_clusters * size]
+    assert centroids.shape == [batch_size, n_clusters * size]
+    inputs = tf.reshape(inputs, shape=[batch_size, n_clusters, size])
+    centroids = tf.reshape(centroids, shape=[batch_size, n_clusters, size])
+    assert centroids.shape == [batch_size, n_clusters, size]
+    return routing(inputs=inputs, v_J=centroids, batch_size=batch_size,
+                   num_caps_i=n_clusters, num_caps_j=n_clusters,
+                   len_u_i=size, len_v_j=size, iter_routing=3)
+
 
 def lstm(inputs, c, h, nbatch, nsteps, size_in, num_units):
     assert inputs.shape == [nbatch * nsteps, size_in]
@@ -134,23 +144,21 @@ class CapsulesPolicy(object):
 
         with tf.variable_scope("model", reuse=reuse):
             c, h = tf.split(value=S, num_or_size_splits=2, axis=1)
+            tiled_c = tf.tile(c, [nsteps, 1])
 
-            h1 = fc(X, 'fc1', nh=num_lstm_units, init_scale=np.sqrt(2), act=tf.tanh)
-            h2 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
-            prior = tf.reshape(c, [nenv, n_capsules, size_mem])
-            prior = tf.tile(prior, [nsteps, 1, 1])
-            assert prior.shape == [nbatch, n_capsules, size_mem]
-            h3 = routing(inputs=h2, v_J=prior, batch_size=nbatch,
-                         num_caps_i=n_capsules, num_caps_j=n_capsules,
-                         len_u_i=size_mem, len_v_j=size_mem, iter_routing=2)
-            h3 = tf.reshape(h3, [nbatch, n_capsules * size_mem])
+            h1 = fc(X, 'fc1', nh=n_capsules * size_mem, init_scale=np.sqrt(2), act=tf.tanh)
+            h2 = cluster(inputs=h1, centroids=tiled_c, n_clusters=n_capsules,
+                         batch_size=nbatch, nsteps=nsteps, size=size_mem)
+            assert h2.shape == [nbatch, n_capsules, size_mem]
+
+            h3 = tf.reshape(h2, [nenv, nsteps, n_capsules * size_mem])
 
             h4, snew = lstm(h3, c, h, nenv, nsteps, n_capsules * size_mem, num_lstm_units)
 
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
 
-            h5 = fc(h4, 'vf_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
+            h5 = fc(h3, 'vf_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             vf = fc(h5, 'vf', 1, act=lambda x: x)[:, 0]
 
             logstd = tf.get_variable(name="logstd", shape=[1, actdim],
