@@ -130,8 +130,8 @@ class CapsulesPolicy(object):
             assert h3.shape == [nbatch, 1, n_capsules, size_mem, 1]
             h4 = tf.reshape(h3, shape=[nbatch, n_capsules * size_mem])
 
-            h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
-            pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
+            # h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
+            pi = fc(h4, 'pi', actdim, act=lambda x: x, init_scale=0.01)
 
             h5 = fc(h4, 'vf_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             vf = fc(h5, 'vf', 1, act=lambda x: x)[:, 0]
