@@ -91,14 +91,14 @@ def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
 
             # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
             s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
-            assert s_J.get_shape() == [batch_size, 1, num_caps_j, (len_v_j), 1]
+            assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
 
             # line 6:
             # squash using Eq.1,
             v_J = squash(s_J)
-            assert v_J.get_shape() == [batch_size, 1, num_caps_j, (len_v_j), 1]
+            assert v_J.shape == [batch_size, 1, num_caps_j, len_v_j, 1]
 
-    return v_J
+    return tf.reshape(v_J, [batch_size, num_caps_j, len_v_j])
 
 
 class CapsulesPolicy(object):
@@ -110,7 +110,7 @@ class CapsulesPolicy(object):
             actdim = ac_space.shape[0]
 
         nenv = nbatch // nsteps
-        n_capsules = 2
+        n_capsules = 5
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
         # S = tf.placeholder(tf.float32, [nenv, 1, n_capsules, size_mem, 1], name='S')  # states
@@ -122,26 +122,26 @@ class CapsulesPolicy(object):
 
             h1 = fc(X, 'fc1', nh=n_capsules * size_mem, init_scale=np.sqrt(2), act=tf.tanh)
 
+            nbatch = nenv * nsteps
             h2 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
-
-            prior = tf.reshape(state_tuple.c, [nenv, n_capsules, size_mem])
+            prior = tf.reshape(c, [nenv, n_capsules, size_mem])
             prior = tf.tile(prior, [nsteps, 1, 1])
             assert prior.shape == [nbatch, n_capsules, size_mem]
             h3 = routing(inputs=h2, v_J=prior, batch_size=nbatch,
                          num_caps_i=n_capsules, num_caps_j=n_capsules,
-                         len_u_i=size_mem, len_v_j=size_mem)
-            assert h3.shape == [nbatch, 1, n_capsules, size_mem, 1]
+                         len_u_i=size_mem, len_v_j=size_mem, iter_routing=3)
+
             h4 = tf.reshape(h3, [nenv, nsteps, n_capsules * size_mem])
 
             cell = LSTMCell(n_capsules * size_mem)
             assert h4.shape == [nenv, nsteps, n_capsules * size_mem]
-            for tensor in state_tuple:
-                assert tensor.shape == [nenv, n_capsules * size_mem]
+            assert state_tuple.c.shape == [nenv, n_capsules * size_mem]
+            assert state_tuple.h.shape == [nenv, n_capsules * size_mem]
             h5, s_out = tf.nn.dynamic_rnn(cell, h4, dtype=tf.float32,
                                           initial_state=state_tuple)
             assert h5.shape == [nenv, nsteps, n_capsules * size_mem]
-            for tensor in s_out:
-                assert tensor.shape == [nenv, n_capsules * size_mem]
+            assert s_out.c.shape == [nenv, n_capsules * size_mem]
+            assert s_out.h.shape == [nenv, n_capsules * size_mem]
 
             snew = tf.concat(s_out, axis=1)
             h4 = tf.reshape(h3, shape=[nbatch, n_capsules * size_mem])
