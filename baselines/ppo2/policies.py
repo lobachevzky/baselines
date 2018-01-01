@@ -118,17 +118,26 @@ class CapsulesPolicy(object):
         n_capsules = 2
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, 1, n_capsules, size_mem, 1], name='S')  # states
+        # S = tf.placeholder(tf.float32, [nenv, 1, n_capsules, size_mem, 1], name='S')  # states
+        S = tf.placeholder(tf.float32, [nenv, 2 * n_capsules * size_mem], name='S')  # states
 
         with tf.variable_scope("model", reuse=reuse):
+            c, h = tf.split(value=S, num_or_size_splits=2, axis=1)
+            state_tuple = LSTMStateTuple(c, h)  # input to LSTM
+
             h1 = fc(X, 'fc1', nh=n_capsules * size_mem, init_scale=np.sqrt(2), act=tf.tanh)
 
             h2 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
-            h3 = routing(inputs=h2, prior=S, output_size=size_mem, num_caps_j=2, scope='pi')
-            snew = tf.reshape(h3, [nenv, nsteps, 1, n_capsules, size_mem, 1])
-            snew = tf.reduce_mean(snew, axis=1)
-            snew = .9 * S + .1 * snew
+
+            prior = tf.reshape(state_tuple.c, [nenv, 1, n_capsules, size_mem, 1])
+            assert prior.shape == [nenv, 1, n_capsules, size_mem, 1]
+            h3 = routing(inputs=h2, prior=prior, output_size=size_mem, num_caps_j=2, scope='pi')
             assert h3.shape == [nbatch, 1, n_capsules, size_mem, 1]
+            cnew = tf.reshape(h3, [nenv, nsteps, 1, n_capsules, size_mem, 1])
+            cnew = tf.reduce_mean(cnew, axis=1)
+            cnew = .9 * prior + .1 * cnew
+            cnew = tf.reshape(cnew, [nenv, n_capsules * size_mem])
+            snew = tf.concat([cnew, h], axis=1)
             h4 = tf.reshape(h3, shape=[nbatch, n_capsules * size_mem])
 
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
@@ -147,7 +156,7 @@ class CapsulesPolicy(object):
 
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        self.initial_state = np.zeros([nenv, 1, n_capsules, size_mem, 1], dtype=np.float32)
+        self.initial_state = np.zeros([nenv, 2 * n_capsules * size_mem], dtype=np.float32)
 
         def step(ob, state, mask):
             return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
