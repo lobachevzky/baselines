@@ -101,30 +101,30 @@ def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
     return tf.reshape(v_J, [batch_size, num_caps_j, len_v_j])
 
 
-def cluster(inputs, centroids, n_clusters, batch_size, nsteps, size):
+def cluster(inputs, centroids, n_clusters, batch_size, size):
     assert inputs.shape == [batch_size, n_clusters * size]
     assert centroids.shape == [batch_size, n_clusters * size]
     inputs = tf.reshape(inputs, shape=[batch_size, n_clusters, size])
     centroids = tf.reshape(centroids, shape=[batch_size, n_clusters, size])
-    assert centroids.shape == [batch_size, n_clusters, size]
     clusters = routing(inputs=inputs, v_J=centroids, batch_size=batch_size, num_caps_i=n_clusters,
                        num_caps_j=n_clusters, len_u_i=size, len_v_j=size, iter_routing=3)
+    assert clusters.shape == [batch_size, n_clusters, size]
     return tf.reshape(clusters, [batch_size, n_clusters * size])
 
 
-def lstm(inputs, c, h, nbatch, nsteps, size_in, num_units):
+def lstm(inputs, c, h, nbatch, nsteps, size_in, size_out):
     assert inputs.shape == [nbatch * nsteps, size_in]
-    assert c.shape == [nbatch, num_units]
-    assert h.shape == [nbatch, num_units]
-    inputs = tf.reshape(inputs, [nbatch, nsteps, num_units])
+    assert c.shape == [nbatch, size_out]
+    assert h.shape == [nbatch, size_out]
+    inputs = tf.reshape(inputs, [nbatch, nsteps, size_out])
     state_in = LSTMStateTuple(c, h)
-    cell = LSTMCell(num_units)
+    cell = LSTMCell(size_out)
     outputs, state_out = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32,
                                            initial_state=state_in)
-    assert outputs.shape == [nbatch, nsteps, num_units]
-    assert state_out.c.shape == [nbatch, num_units]
-    assert state_out.h.shape == [nbatch, num_units]
-    return tf.reshape(outputs, [nbatch * nsteps, num_units]), tf.concat(state_out, axis=1)
+    assert outputs.shape == [nbatch, nsteps, size_out]
+    assert state_out.c.shape == [nbatch, size_out]
+    assert state_out.h.shape == [nbatch, size_out]
+    return tf.reshape(outputs, [nbatch * nsteps, size_out]), tf.concat(state_out, axis=1)
 
 
 class CapsulesPolicy(object):
@@ -135,28 +135,26 @@ class CapsulesPolicy(object):
         else:
             actdim = ac_space.shape[0]
 
+        assert nbatch % nsteps == 0
         nenv = nbatch // nsteps
         n_capsules = 2
-        num_lstm_units = n_capsules * size_mem
+        size_lstm = n_capsules * size_mem
 
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, 2 * n_capsules * size_mem], name='S')  # states
+        S = tf.placeholder(tf.float32, [nenv, 2 * size_lstm], name='S')  # states
 
         with tf.variable_scope("model", reuse=reuse):
             c, h = tf.split(value=S, num_or_size_splits=2, axis=1)
             tiled_c = tf.tile(c, [nsteps, 1])
 
-            h1 = fc(X, 'fc1', nh=n_capsules * size_mem, init_scale=np.sqrt(2), act=tf.tanh)
-            h2 = cluster(inputs=h1, centroids=tiled_c, n_clusters=n_capsules,
-                         batch_size=nbatch, nsteps=nsteps, size=size_mem)
-
-            h4, snew = lstm(inputs=h2, c=c, h=h, nbatch=nenv, nsteps=nsteps,
-                            size_in=num_lstm_units, num_units=num_lstm_units)
-
+            h1 = fc(X, 'fc1', nh=size_lstm, init_scale=np.sqrt(2), act=tf.tanh)
+            h2 = cluster(inputs=h1, centroids=tiled_c,
+                         batch_size=nbatch, n_clusters=n_capsules, size=size_mem)
+            h4, snew = lstm(inputs=h2, c=c, h=h,
+                            nbatch=nenv, nsteps=nsteps, size_in=size_lstm, size_out=size_lstm)
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
-
             h5 = fc(h4, 'vf_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             vf = fc(h5, 'vf', 1, act=lambda x: x)[:, 0]
 
