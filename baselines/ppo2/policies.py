@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell_impl import LSTMCell, LSTMStateTuple
 
-from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
+from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lnlstm
 from baselines.common.distributions import make_pdtype
 
 
@@ -101,6 +101,21 @@ def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
     return tf.reshape(v_J, [batch_size, num_caps_j, len_v_j])
 
 
+def lstm(inputs, c, h, nbatch, nsteps, size_in, num_units):
+    assert inputs.shape == [nbatch * nsteps, size_in]
+    assert c.shape == [nbatch, num_units]
+    assert h.shape == [nbatch, num_units]
+    inputs = tf.reshape(inputs, [nbatch, nsteps, num_units])
+    state_in = LSTMStateTuple(c, h)
+    cell = LSTMCell(num_units)
+    outputs, state_out = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32,
+                                           initial_state=state_in)
+    assert outputs.shape == [nbatch, nsteps, num_units]
+    assert state_out.c.shape == [nbatch, num_units]
+    assert state_out.h.shape == [nbatch, num_units]
+    return tf.reshape(outputs, [nbatch * nsteps, num_units]), tf.concat(state_out, axis=1)
+
+
 class CapsulesPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, size_mem=64, reuse=False):  # pylint: disable=W0613
         ob_shape = (nbatch,) + ob_space.shape
@@ -111,17 +126,16 @@ class CapsulesPolicy(object):
 
         nenv = nbatch // nsteps
         n_capsules = 2
+        num_lstm_units = n_capsules * size_mem
+
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, 2 * n_capsules * size_mem], name='S')  # states
 
         with tf.variable_scope("model", reuse=reuse):
             c, h = tf.split(value=S, num_or_size_splits=2, axis=1)
-            state_tuple = LSTMStateTuple(c, h)  # input to LSTM
 
-            h1 = fc(X, 'fc1', nh=n_capsules * size_mem, init_scale=np.sqrt(2), act=tf.tanh)
-
-            nbatch = nenv * nsteps
+            h1 = fc(X, 'fc1', nh=num_lstm_units, init_scale=np.sqrt(2), act=tf.tanh)
             h2 = tf.reshape(h1, shape=[nbatch, n_capsules, size_mem])
             prior = tf.reshape(c, [nenv, n_capsules, size_mem])
             prior = tf.tile(prior, [nsteps, 1, 1])
@@ -129,21 +143,9 @@ class CapsulesPolicy(object):
             h3 = routing(inputs=h2, v_J=prior, batch_size=nbatch,
                          num_caps_i=n_capsules, num_caps_j=n_capsules,
                          len_u_i=size_mem, len_v_j=size_mem, iter_routing=2)
+            h3 = tf.reshape(h3, [nbatch, n_capsules * size_mem])
 
-            h4 = tf.reshape(h3, [nenv, nsteps, n_capsules * size_mem])
-
-            cell = LSTMCell(n_capsules * size_mem)
-            assert h4.shape == [nenv, nsteps, n_capsules * size_mem]
-            assert state_tuple.c.shape == [nenv, n_capsules * size_mem]
-            assert state_tuple.h.shape == [nenv, n_capsules * size_mem]
-            h5, s_out = tf.nn.dynamic_rnn(cell, h4, dtype=tf.float32,
-                                          initial_state=state_tuple)
-            assert h5.shape == [nenv, nsteps, n_capsules * size_mem]
-            assert s_out.c.shape == [nenv, n_capsules * size_mem]
-            assert s_out.h.shape == [nenv, n_capsules * size_mem]
-
-            snew = tf.concat(s_out, axis=1)
-            h4 = tf.reshape(h5, shape=[nbatch, n_capsules * size_mem])
+            h4, snew = lstm(h3, c, h, nenv, nsteps, n_capsules * size_mem, num_lstm_units)
 
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
