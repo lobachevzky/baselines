@@ -133,11 +133,19 @@ class CapsulesPolicy(object):
             assert prior.shape == [nenv, 1, n_capsules, size_mem, 1]
             h3 = routing(inputs=h2, prior=prior, output_size=size_mem, num_caps_j=2, scope='pi')
             assert h3.shape == [nbatch, 1, n_capsules, size_mem, 1]
-            cnew = tf.reshape(h3, [nenv, nsteps, 1, n_capsules, size_mem, 1])
-            cnew = tf.reduce_mean(cnew, axis=1)
-            cnew = .9 * prior + .1 * cnew
-            cnew = tf.reshape(cnew, [nenv, n_capsules * size_mem])
-            snew = tf.concat([cnew, h], axis=1)
+            h4 = tf.reshape(h3, [nenv, nsteps, n_capsules * size_mem])
+
+            cell = LSTMCell(n_capsules * size_mem)
+            assert h4.shape == [nenv, nsteps, n_capsules * size_mem]
+            for tensor in state_tuple:
+                assert tensor.shape == [nenv, n_capsules * size_mem]
+            h5, s_out = tf.nn.dynamic_rnn(cell, h4, dtype=tf.float32,
+                                          initial_state=state_tuple)
+            assert h5.shape == [nenv, nsteps, n_capsules * size_mem]
+            for tensor in s_out:
+                assert tensor.shape == [nenv, n_capsules * size_mem]
+
+            snew = tf.concat(s_out, axis=1)
             h4 = tf.reshape(h3, shape=[nbatch, n_capsules * size_mem])
 
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
