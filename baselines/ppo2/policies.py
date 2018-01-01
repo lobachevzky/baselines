@@ -110,10 +110,9 @@ class CapsulesPolicy(object):
             actdim = ac_space.shape[0]
 
         nenv = nbatch // nsteps
-        n_capsules = 5
+        n_capsules = 2
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
-        # S = tf.placeholder(tf.float32, [nenv, 1, n_capsules, size_mem, 1], name='S')  # states
         S = tf.placeholder(tf.float32, [nenv, 2 * n_capsules * size_mem], name='S')  # states
 
         with tf.variable_scope("model", reuse=reuse):
@@ -129,7 +128,7 @@ class CapsulesPolicy(object):
             assert prior.shape == [nbatch, n_capsules, size_mem]
             h3 = routing(inputs=h2, v_J=prior, batch_size=nbatch,
                          num_caps_i=n_capsules, num_caps_j=n_capsules,
-                         len_u_i=size_mem, len_v_j=size_mem, iter_routing=3)
+                         len_u_i=size_mem, len_v_j=size_mem, iter_routing=2)
 
             h4 = tf.reshape(h3, [nenv, nsteps, n_capsules * size_mem])
 
@@ -144,7 +143,7 @@ class CapsulesPolicy(object):
             assert s_out.h.shape == [nenv, n_capsules * size_mem]
 
             snew = tf.concat(s_out, axis=1)
-            h4 = tf.reshape(h3, shape=[nbatch, n_capsules * size_mem])
+            h4 = tf.reshape(h5, shape=[nbatch, n_capsules * size_mem])
 
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
