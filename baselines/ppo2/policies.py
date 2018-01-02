@@ -148,7 +148,12 @@ class CapsulesPolicy(object):
             c, h = tf.split(value=S, num_or_size_splits=2, axis=1)
             tiled_c = tf.tile(c, [nsteps, 1])
 
-            h1 = fc(X, 'fc1', nh=size_lstm, init_scale=np.sqrt(2), act=tf.tanh)
+            if ob_space.shape == ():
+                h0 = tf.reshape(X, [nbatch, 1])
+            else:
+                h0 = X
+
+            h1 = fc(h0, 'fc1', nh=size_lstm, init_scale=np.sqrt(2), act=tf.tanh)
             h2 = cluster(inputs=h1, centroids=tiled_c,
                          batch_size=nbatch, n_clusters=n_capsules, size=size_mem)
             h4, snew = lstm(inputs=h2, c=c, h=h,
