@@ -13,7 +13,7 @@ def squash(vector, epsilon=1e-9):
     Returns:
         A tensor with the same shape as vector but squashed in 'vec_len' dimension.
     """
-    vec_squared_norm = tf.reduce_sum(tf.square(vector), -2, keep_dims=True)
+    vec_squared_norm = tf.reduce_sum(tf.square(vector), -2, keepdims=True)
     scalar_factor = vec_squared_norm / (1 + vec_squared_norm) / tf.sqrt(vec_squared_norm + epsilon)
     # element-wise
     return scalar_factor * vector
@@ -78,7 +78,7 @@ def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
 
             # line 4:
             # => [batch_size, 1152, 10, 1, 1]
-            c_IJ = tf.nn.softmax(b_IJ, dim=2)
+            c_IJ = tf.nn.softmax(b_IJ, axis=2)
 
             # line 5:
             # weighting u_hat with c_IJ, element-wise in the last two dims
@@ -90,7 +90,7 @@ def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
             s_J = tf.multiply(c_IJ, u_hat if one_iter else u_hat_stopped)
 
             # then sum in the second dim, resulting in [batch_size, 1, 10, 16, 1]
-            s_J = tf.reduce_sum(s_J, axis=1, keep_dims=True)
+            s_J = tf.reduce_sum(s_J, axis=1, keepdims=True)
             assert s_J.get_shape() == [batch_size, 1, num_caps_j, len_v_j, 1]
 
             # line 6:
@@ -137,7 +137,7 @@ def weight(inputs, state, nbatch, nsteps, n_capsules, size):
     inputs = tf.reshape(inputs, [nbatch * nsteps, n_capsules, size])
     c = tf.reshape(state.c, [nbatch, n_capsules, size])
 
-    weights = tf.sqrt(tf.reduce_sum(axis=2, input_tensor=tf.square(c), keep_dims=True))
+    weights = tf.sqrt(tf.reduce_sum(axis=2, input_tensor=tf.square(c), keepdims=True))
     assert weights.shape == [nbatch, n_capsules, 1]
     weights = tf.tile(weights, [nsteps, 1, 1])
     assert weights.shape == [nbatch * nsteps, n_capsules, 1]
