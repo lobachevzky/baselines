@@ -102,12 +102,13 @@ def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
 
 
 def cluster(inputs, centroids, n_clusters, batch_size, size_cluster):
-    assert inputs.shape == [batch_size, n_clusters * size_cluster]
+    assert inputs.shape == [batch_size, size_cluster]
     assert centroids.shape == [batch_size, n_clusters * size_cluster]
-    inputs = tf.reshape(inputs, shape=[batch_size, n_clusters, size_cluster])
+    inputs = tf.reshape(inputs, shape=[batch_size, 1, size_cluster])
     centroids = tf.reshape(centroids, shape=[batch_size, n_clusters, size_cluster])
-    clusters = routing(inputs=inputs, v_J=centroids, batch_size=batch_size, num_caps_i=n_clusters,
-                       num_caps_j=n_clusters, len_u_i=size_cluster, len_v_j=size_cluster, iter_routing=1)
+    clusters = routing(inputs=inputs, v_J=centroids, batch_size=batch_size, num_caps_i=1,
+                       num_caps_j=n_clusters, len_u_i=size_cluster, len_v_j=size_cluster,
+                       iter_routing=1)
     assert clusters.shape == [batch_size, n_clusters, size_cluster]
     return tf.reshape(clusters, [batch_size, n_clusters * size_cluster])
 
@@ -172,7 +173,7 @@ class CapsulesPolicy(object):
             else:
                 h0 = X
 
-            h1 = fc(h0, 'fc1', nh=size_lstm, init_scale=np.sqrt(2), act=tf.tanh)
+            h1 = fc(h0, 'fc1', nh=size_cluster, init_scale=np.sqrt(2), act=tf.tanh)
 
             # Associate new observation (h1) with existing hypotheses (tiled_c).
             # Produce versions of hypothesis weighted by their relation to existing hypotheses.
