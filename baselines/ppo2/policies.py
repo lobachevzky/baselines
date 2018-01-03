@@ -129,17 +129,17 @@ def lstm(inputs, c, h, nbatch, nsteps, size_in, size_out):
     # tf.concat(state_out, axis=1)
 
 
-def weight(inputs, c, nbatch, nsteps, n_capsules, size):
-    assert inputs.shape == [nbatch * nsteps, n_capsules * size]
-    assert c.shape == [nbatch, n_capsules * size]
+def weight(inputs, c, nbatch, nsteps, n_clusters, size):
+    assert inputs.shape == [nbatch * nsteps, n_clusters * size]
+    assert c.shape == [nbatch, n_clusters * size]
 
-    inputs = tf.reshape(inputs, [nbatch * nsteps, n_capsules, size])
-    c = tf.reshape(c, [nbatch, n_capsules, size])
+    inputs = tf.reshape(inputs, [nbatch * nsteps, n_clusters, size])
+    c = tf.reshape(c, [nbatch, n_clusters, size])
 
     weights = tf.sqrt(tf.reduce_sum(axis=2, input_tensor=tf.square(c), keepdims=True))
-    assert weights.shape == [nbatch, n_capsules, 1]
+    assert weights.shape == [nbatch, n_clusters, 1]
     weights = tf.tile(weights, [nsteps, 1, 1])
-    assert weights.shape == [nbatch * nsteps, n_capsules, 1]
+    assert weights.shape == [nbatch * nsteps, n_clusters, 1]
 
     weighted = tf.matmul(inputs, weights, transpose_a=True)
     assert weighted.shape == [nbatch * nsteps, size, 1]
@@ -186,8 +186,8 @@ class CapsulesPolicy(object):
 
             # Update existing hypotheses with new information.
             h3 = tiled_c + h2
-            cnew = tf.reshape(h3, [nenv, nsteps, size_lstm])
-            state_out = [tf.reduce_sum(cnew, axis=1), h]
+            cnew = tf.reshape(h3, [nsteps, nenv, size_lstm])
+            state_out = [tf.reduce_sum(cnew, axis=0), h]
             # h3, state_out = lstm(inputs=h2, c=c, h=h,
             #                      nbatch=nenv, nsteps=nsteps,
             #                      size_in=size_lstm, size_out=size_lstm)
@@ -195,7 +195,7 @@ class CapsulesPolicy(object):
             # Weight outputs by 'confidence' of hypotheses.
             h4 = weight(inputs=h3, c=c,
                         nbatch=nenv, nsteps=nsteps,
-                        n_capsules=n_capsules, size=size_cluster)
+                        n_clusters=n_capsules, size=size_cluster)
 
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
