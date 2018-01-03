@@ -186,8 +186,8 @@ class CapsulesPolicy(object):
 
             # Update existing hypotheses with new information.
             h3 = tiled_c + h2
-            cnew = tf.reshape(h3, [nenv, nsteps, size_lstm])
-            state_out = [tf.reduce_sum(cnew, axis=1), h]
+            cnew = tf.reshape(h3, [nsteps, nenv, size_lstm])
+            state_out = [tf.reduce_sum(cnew, axis=0), h]
             # h3, state_out = lstm(inputs=h2, c=c, h=h,
             #                      nbatch=nenv, nsteps=nsteps,
             #                      size_in=size_lstm, size_out=size_lstm)
