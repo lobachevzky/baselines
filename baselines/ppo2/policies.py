@@ -185,9 +185,9 @@ class CapsulesPolicy(object):
             assert h2.shape == [nbatch, size_lstm]
 
             # Update existing hypotheses with new information.
-            h3 = tf.sign(tiled_c + h2)
+            h3 = tf.sin(tiled_c + h2)
             cnew = tf.reshape(h3, [nsteps, nenv, size_lstm])
-            state_out = [tf.sign(tf.reduce_sum(cnew, axis=0), h)]
+            state_out = [tf.sin(tf.reduce_sum(cnew, axis=0)), h]
             # h3, state_out = lstm(inputs=h2, c=c, h=h,
             #                      nbatch=nenv, nsteps=nsteps,
             #                      size_in=size_lstm, size_out=size_lstm)
