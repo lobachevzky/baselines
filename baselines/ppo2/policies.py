@@ -185,7 +185,7 @@ class CapsulesPolicy(object):
             assert h2.shape == [nbatch, size_lstm]
 
             # Update existing hypotheses with new information.
-            h3 = h2
+            h4 = h2
             # cnew = tf.reshape(h2, [nenv, nsteps, size_lstm])
             state_out = [c, h] # [.9 * c + .1 * tf.reduce_mean(cnew, axis=1), h]
             # state_out = [tf.sin(tf.reduce_sum(cnew, axis=0)), h]
@@ -194,9 +194,9 @@ class CapsulesPolicy(object):
             #                      size_in=size_lstm, size_out=size_lstm)
 
             # Weight outputs by 'confidence' of hypotheses.
-            h4 = weight(inputs=h3, c=c,
-                        nbatch=nenv, nsteps=nsteps,
-                        n_clusters=n_capsules, size=size_cluster)
+            # h4 = weight(inputs=h3, c=c,
+                        # nbatch=nenv, nsteps=nsteps,
+                        # n_clusters=n_capsules, size=size_cluster)
 
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
