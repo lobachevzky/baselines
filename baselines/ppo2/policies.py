@@ -183,12 +183,13 @@ class CapsulesPolicy(object):
             h2 = cluster(inputs=h1, centroids=tiled_c,
                          batch_size=nbatch, n_clusters=n_capsules, size_cluster=size_cluster)
             assert h2.shape == [nbatch, size_lstm]
+            assert tiled_c.shape == [nbatch, size_lstm]
 
             # Update existing hypotheses with new information.
             h4 = h2
-            cnew = tf.concat(axis=1, values=[tf.reshape(h4, [nenv, nsteps * size_lstm]), c])
-            cnew = fc(cnew, 'cnew', size_lstm)
-            state_out = [cnew, h]
+            cnew = tf.concat(axis=1, values=[h2, tiled_c])
+            cnew = fc(cnew, 'cnew', nh=size_lstm)
+            state_out = [tf.reduce_mean(axis=0, input_tensor=tf.reshape(cnew, [nsteps, nenv, size_lstm])), h]
             # state_out = [tf.sin(tf.reduce_sum(cnew, axis=0)), h]
             # h3, state_out = lstm(inputs=h2, c=c, h=h,
             #                      nbatch=nenv, nsteps=nsteps,
