@@ -186,8 +186,8 @@ class CapsulesPolicy(object):
 
             # Update existing hypotheses with new information.
             h4 = h2
-            # cnew = tf.reshape(h2, [nenv, nsteps, size_lstm])
-            state_out = [c, h] # [.9 * c + .1 * tf.reduce_mean(cnew, axis=1), h]
+            cnew = tf.reshape(h4, [nenv, nsteps, size_lstm])
+            state_out = [.9 * c + .1 * tf.reduce_mean(cnew, axis=1), h]
             # state_out = [tf.sin(tf.reduce_sum(cnew, axis=0)), h]
             # h3, state_out = lstm(inputs=h2, c=c, h=h,
             #                      nbatch=nenv, nsteps=nsteps,
