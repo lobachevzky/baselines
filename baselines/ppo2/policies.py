@@ -186,19 +186,19 @@ class CapsulesPolicy(object):
             assert tiled_c.shape == [nbatch, size_lstm]
 
             # Update existing hypotheses with new information.
-            h4 = h2
-            cnew = tf.concat(axis=1, values=[h2, tiled_c])
-            cnew = fc(cnew, 'cnew', nh=size_lstm)
-            state_out = [tf.reduce_mean(axis=0, input_tensor=tf.reshape(cnew, [nsteps, nenv, size_lstm])), h]
+            c1 = tf.concat(axis=1, values=[h2, tiled_c])
+            c2 = fc(c1, 'cnew', nh=size_lstm)
+            c3 = tf.reduce_mean(axis=0, input_tensor=tf.reshape(c2, [nsteps, nenv, size_lstm]))
+            state_out = [c3, h]
             # state_out = [tf.sin(tf.reduce_sum(cnew, axis=0)), h]
             # h3, state_out = lstm(inputs=h2, c=c, h=h,
             #                      nbatch=nenv, nsteps=nsteps,
             #                      size_in=size_lstm, size_out=size_lstm)
 
             # Weight outputs by 'confidence' of hypotheses.
-            # h4 = weight(inputs=h3, c=c,
-                        # nbatch=nenv, nsteps=nsteps,
-                        # n_clusters=n_capsules, size=size_cluster)
+            h4 = weight(inputs=h2, c=c,
+                        nbatch=nenv, nsteps=nsteps,
+                        n_clusters=n_capsules, size=size_cluster)
 
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
