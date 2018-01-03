@@ -129,13 +129,12 @@ def lstm(inputs, c, h, nbatch, nsteps, size_in, size_out):
     # tf.concat(state_out, axis=1)
 
 
-def weight(inputs, state, nbatch, nsteps, n_capsules, size):
+def weight(inputs, c, nbatch, nsteps, n_capsules, size):
     assert inputs.shape == [nbatch * nsteps, n_capsules * size]
-    assert state.c.shape == [nbatch, n_capsules * size]
-    assert state.h.shape == [nbatch, n_capsules * size]
+    assert c.shape == [nbatch, n_capsules * size]
 
     inputs = tf.reshape(inputs, [nbatch * nsteps, n_capsules, size])
-    c = tf.reshape(state.c, [nbatch, n_capsules, size])
+    c = tf.reshape(c, [nbatch, n_capsules, size])
 
     weights = tf.sqrt(tf.reduce_sum(axis=2, input_tensor=tf.square(c), keepdims=True))
     assert weights.shape == [nbatch, n_capsules, 1]
@@ -166,7 +165,11 @@ class CapsulesPolicy(object):
 
         with tf.variable_scope("model", reuse=reuse):
             c, h = tf.split(value=S, num_or_size_splits=2, axis=1)
+            assert c.shape == [nenv, size_lstm]
+            assert h.shape == [nenv, size_lstm]
+
             tiled_c = tf.tile(c, [nsteps, 1])
+            assert tiled_c.shape == [nbatch, size_lstm]
 
             if ob_space.shape == ():
                 h0 = tf.reshape(X, [nbatch, 1])
@@ -179,14 +182,18 @@ class CapsulesPolicy(object):
             # Produce versions of hypothesis weighted by their relation to existing hypotheses.
             h2 = cluster(inputs=h1, centroids=tiled_c,
                          batch_size=nbatch, n_clusters=n_capsules, size_cluster=size_cluster)
+            assert h2.shape == [nbatch, size_lstm]
 
             # Update existing hypotheses with new information.
-            h3, state_out = lstm(inputs=h2, c=c, h=h,
-                                 nbatch=nenv, nsteps=nsteps,
-                                 size_in=size_lstm, size_out=size_lstm)
+            h3 = tiled_c + h2
+            cnew = tf.reshape(h3, [nenv, nsteps, size_lstm])
+            state_out = [tf.reduce_sum(cnew, axis=1), h]
+            # h3, state_out = lstm(inputs=h2, c=c, h=h,
+            #                      nbatch=nenv, nsteps=nsteps,
+            #                      size_in=size_lstm, size_out=size_lstm)
 
             # Weight outputs by 'confidence' of hypotheses.
-            h4 = weight(h3, state_out,
+            h4 = weight(inputs=h3, c=c,
                         nbatch=nenv, nsteps=nsteps,
                         n_capsules=n_capsules, size=size_cluster)
 
