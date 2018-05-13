@@ -126,7 +126,7 @@ def launch(
             'You are running HER with just a single MPI worker. This will work, but the ' +
             'experiments that we report in Plappert et al. (2018, https://arxiv.org/abs/1802.09464) ' +
             'were obtained with --num_cpu 19. This makes a significant difference and if you ' +
-            'are looking to reproduce those results, be aware of this. Please also refer to ' + 
+            'are looking to reproduce those results, be aware of this. Please also refer to ' +
             'https://github.com/openai/baselines/issues/314 for further details.')
         logger.warn('****************')
         logger.warn()

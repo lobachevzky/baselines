@@ -1,18 +1,18 @@
-from copy import deepcopy
-import numpy as np
-import json
-import os
 import gym
+import numpy as np
 
-from baselines import logger
 from baselines.her.ddpg import DDPG
 from baselines.her.her import make_sample_her_transitions
+from environment.pick_and_place import PickAndPlaceEnv
 
 
 DEFAULT_ENV_PARAMS = {
     'FetchReach-v0': {
         'n_cycles': 10,
     },
+    'pick-and-place': {
+        'make_env': lambda: PickAndPlaceEnv()
+    }
 }
 
 
@@ -51,6 +51,8 @@ DEFAULT_PARAMS = {
 
 
 CACHED_ENVS = {}
+
+
 def cached_make_env(make_env):
     """
     Only creates a new environment from the provided function if one has not yet already been
@@ -68,6 +70,7 @@ def prepare_params(kwargs):
     ddpg_params = dict()
 
     env_name = kwargs['env_name']
+
     def make_env():
         return gym.make(env_name)
     kwargs['make_env'] = make_env
@@ -83,7 +86,7 @@ def prepare_params(kwargs):
         del kwargs['lr']
     for name in ['buffer_size', 'hidden', 'layers',
                  'network_class',
-                 'polyak', 
+                 'polyak',
                  'batch_size', 'Q_lr', 'pi_lr',
                  'norm_eps', 'norm_clip', 'max_u',
                  'action_l2', 'clip_obs', 'scope', 'relative_goals']:
@@ -103,6 +106,7 @@ def log_params(params, logger=logger):
 def configure_her(params):
     env = cached_make_env(params['make_env'])
     env.reset()
+
     def reward_fun(ag_2, g, info):  # vectorized
         return env.compute_reward(achieved_goal=ag_2, desired_goal=g, info=info)
 
