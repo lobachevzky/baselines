@@ -64,12 +64,12 @@ class Arm2PosEnv(MujocoEnv):
     def _currently_failed(self):
         return False
 
-    def compute_terminal(self, goal, obs):
+    def _compute_terminal(self, goal, obs):
         goal, = goal
         qpos, = obs
         return at_goal(self._gripper_pos(qpos), goal, self._geofence)
 
-    def compute_reward(self, goal, obs):
+    def _compute_reward(self, goal, obs):
         goal_pos, = goal
         qpos, = obs
         if at_goal(self._gripper_pos(qpos), goal_pos, self._geofence):

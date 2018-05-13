@@ -38,6 +38,13 @@ class PickAndPlaceEnv(MujocoEnv):
         self._min_lift_height = min_lift_height + geofence
         self._geofence = geofence
 
+        left_finger_name = 'hand_l_distal_link'
+        self._finger_names = [
+            left_finger_name,
+            left_finger_name.replace('_l_', '_r_')
+        ]
+        self._initial_block_pos = np.zeros(3)
+
         super().__init__(
             max_steps=max_steps,
             xml_filepath=join('models', 'pick-and-place', 'world.xml'),
@@ -48,11 +55,6 @@ class PickAndPlaceEnv(MujocoEnv):
 
         self.initial_qpos = np.copy(self.init_qpos)
         self._initial_block_pos = np.copy(self.block_pos())
-        left_finger_name = 'hand_l_distal_link'
-        self._finger_names = [
-            left_finger_name,
-            left_finger_name.replace('_l_', '_r_')
-        ]
         obs_size = history_len * sum(map(np.size, self._obs())) + sum(
             map(np.size, self.goal()))
         assert obs_size != 0
@@ -127,7 +129,9 @@ class PickAndPlaceEnv(MujocoEnv):
         pass
 
     def _obs(self):
-        return np.copy(self.sim.qpos),
+        return dict(observation=np.copy(self.sim.qpos),
+                    achieved_goal=Goal(gripper=self.gripper_pos(), block=self.block_pos()),
+                    desired_goal=self.goal())
 
     def block_pos(self, qpos=None):
         return self.sim.get_body_xpos(self._goal_block_name, qpos)
@@ -149,25 +153,37 @@ class PickAndPlaceEnv(MujocoEnv):
     def _currently_failed(self):
         return False
 
-    def _at_goal(self, goal, obs):
-        qpos, = obs
+    def _at_goal(self, achieved_goal, desired_goal):
+        assert isinstance(achieved_goal, Goal)
+        assert isinstance(desired_goal, Goal)
         gripper_at_goal = at_goal(
-            self.gripper_pos(qpos), goal.gripper, self._geofence)
+            achieved_goal.gripper, desired_goal.gripper, self._geofence)
         block_at_goal = at_goal(
-            self.block_pos(qpos), goal.block, self._geofence)
+            achieved_goal.block, desired_goal.block, self._geofence)
         return gripper_at_goal and block_at_goal
 
-    def compute_terminal(self, goal, obs):
+    def _compute_terminal(self, achieved_goal, desired_goal):
+        assert isinstance(achieved_goal, Goal)
+        assert isinstance(desired_goal, Goal)
         # return False
-        return self._at_goal(goal, obs)
+        return self._at_goal(achieved_goal, desired_goal)
 
-    def compute_reward(self, goal, obs):
-        if self._at_goal(goal, obs):
+    def _compute_reward(self, achieved_goal, desired_goal, info):
+        assert isinstance(achieved_goal, Goal)
+        assert isinstance(desired_goal, Goal)
+        if self._at_goal(achieved_goal, desired_goal):
             return 1
         elif self._neg_reward:
             return -.0001
         else:
             return 0
+
+    def compute_reward(self, achieved_goal, desired_goal, info):
+        def goalify(array):
+            return Goal(gripper=array[:3], block=array[3:])
+        return np.array([self._compute_reward(*map(goalify, [a, d]), info)
+                         for a, d in zip(achieved_goal, desired_goal)])
+
 
     def step(self, action):
         action = np.clip(action, -1, 1)
@@ -195,3 +211,11 @@ class PickAndPlaceEnv(MujocoEnv):
                                        self.action_space.shape)
         action = np.insert(action, mirroring_indexes, action[mirrored_indexes])
         return super().step(action)
+
+    def _vectorize_state(self, state):
+        def concat(key):
+            states = [o[key] if isinstance(o[key], np.ndarray) else np.concatenate(o[key])
+                      for o in state]
+            return np.concatenate(states)
+        return {k: concat(k) for k in
+                ['observation', 'achieved_goal', 'desired_goal']}

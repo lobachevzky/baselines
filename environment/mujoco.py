@@ -61,11 +61,11 @@ class MujocoEnv(BaseEnv):
         self.sim.qpos[:] = qpos.copy()
         self.sim.qvel[:] = qvel.copy()
         self.sim.forward()
-        return deepcopy(self._history_buffer)
+        return self._vectorize_state(deepcopy(self._history_buffer))
 
     @abstractmethod
     def reset_qpos(self):
-        raise NotImplemented
+        raise NotImplementedError
 
     def __enter__(self):
         return self

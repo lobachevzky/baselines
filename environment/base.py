@@ -18,7 +18,7 @@ class BaseEnv(gym.Env):
         self._step_num = 0
         self._neg_reward = neg_reward
         self._image_dimensions = image_dimensions
-        self.max_steps = max_steps
+        self._max_episode_steps = max_steps
 
         self._history_buffer += [self._obs()] * history_len
         self.observation_space = self.action_space = None
@@ -36,21 +36,23 @@ class BaseEnv(gym.Env):
 
         while not done and step < self._steps_per_action:
             self._perform_action(action)
+            obs = self._obs()
             done = False
-            if self.compute_terminal(self.goal(), self._obs()):
+            if self._compute_terminal(obs['achieved_goal'], obs['desired_goal']):
                 done = True
             elif self.hit_max_steps():
                 done = True
             elif self._currently_failed():
                 done = True
-            reward += self.compute_reward(self.goal(), self._obs())
+            reward += self._compute_reward(obs['achieved_goal'], obs['desired_goal'], {})
             step += 1
 
         self._history_buffer.append(self._obs())
-        return deepcopy(self._history_buffer), reward, done, {}
+        state = self._vectorize_state(deepcopy(self._history_buffer))
+        return state, reward, done, {}
 
     def hit_max_steps(self):
-        return self._step_num >= self.max_steps
+        return self._step_num >= self._max_episode_steps
 
     def seed(self, seed=None):
         np.random.seed(seed)
@@ -86,6 +88,10 @@ class BaseEnv(gym.Env):
         raise NotImplementedError
 
     @abstractmethod
+    def _vectorize_state(self, state):
+        raise NotImplementedError
+
+    @abstractmethod
     def goal(self):
         raise NotImplementedError
 
@@ -98,11 +104,11 @@ class BaseEnv(gym.Env):
         raise NotImplementedError
 
     @abstractmethod
-    def compute_terminal(self, goal, obs):
+    def _compute_terminal(self, achieved_goal, desired_goal):
         raise NotImplementedError
 
     @abstractmethod
-    def compute_reward(self, goal, obs):
+    def _compute_reward(self, achieved_goal, desired_goal, info):
         raise NotImplementedError
 
 

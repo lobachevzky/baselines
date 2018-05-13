@@ -107,12 +107,12 @@ class NavigateEnv(BaseEnv):
     def _pos(self):
         return self.sim.get_body_xpos(self._body_name)[:2]
 
-    def compute_terminal(self, goal, obs):
+    def _compute_terminal(self, goal, obs):
         goal, = goal
         pos = obs[0]
         return at_goal(pos, goal, self._geofence)
 
-    def compute_reward(self, goal, obs):
+    def _compute_reward(self, goal, obs):
         pos = obs[0]
         if at_goal(pos, goal, self._geofence):
             return 1

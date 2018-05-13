@@ -11,9 +11,6 @@ DEFAULT_ENV_PARAMS = {
     'FetchReach-v1': {
         'n_cycles': 10,
     },
-    'pick-and-place': {
-        'make_env': lambda: PickAndPlaceEnv()
-    }
 }
 
 
@@ -72,8 +69,15 @@ def prepare_params(kwargs):
 
     env_name = kwargs['env_name']
 
-    def make_env():
-        return gym.make(env_name)
+    if env_name == 'pick-and-place':
+        import mujoco
+        mujoco.activate(b'/home/ethanbro/.mujoco/mjkey.txt')
+
+        def make_env():
+            return PickAndPlaceEnv(max_steps=500, random_block=True)
+    else:
+        def make_env():
+            return gym.make(env_name)
     kwargs['make_env'] = make_env
     tmp_env = cached_make_env(kwargs['make_env'])
     assert hasattr(tmp_env, '_max_episode_steps')

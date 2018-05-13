@@ -101,12 +101,12 @@ class Arm2TouchEnv(BaseEnv):
         else:
             return self.are_positions_touching(block2, gripper)
 
-    def compute_terminal(self, goal, obs):
+    def _compute_terminal(self, goal, obs):
         goal, = goal
         qpos, = obs
         return self.at_goal(qpos, goal)
 
-    def compute_reward(self, goal, obs):
+    def _compute_reward(self, goal, obs):
         qpos, = obs
         if self.at_goal(qpos, goal):
             return 1
