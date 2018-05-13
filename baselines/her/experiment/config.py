@@ -1,13 +1,14 @@
 import gym
 import numpy as np
 
+from baselines import logger
 from baselines.her.ddpg import DDPG
 from baselines.her.her import make_sample_her_transitions
 from environment.pick_and_place import PickAndPlaceEnv
 
 
 DEFAULT_ENV_PARAMS = {
-    'FetchReach-v0': {
+    'FetchReach-v1': {
         'n_cycles': 10,
     },
     'pick-and-place': {
