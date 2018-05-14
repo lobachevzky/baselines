@@ -71,8 +71,6 @@ def prepare_params(kwargs):
 
     if env_name == 'pick-and-place':
         import mujoco
-        mujoco.activate(b'/home/ethanbro/.mujoco/mjkey.txt')
-
         def make_env():
             return PickAndPlaceEnv(max_steps=500, random_block=True)
     else:
