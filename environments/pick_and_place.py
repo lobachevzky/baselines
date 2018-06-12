@@ -2,6 +2,7 @@ import random
 from collections import namedtuple
 from os.path import join
 from pathlib import Path
+from typing import List
 
 import numpy as np
 from gym import spaces
@@ -81,7 +82,7 @@ class PickAndPlaceEnv(MujocoEnv):
         self._initial_block_pos = np.copy(self.block_pos())
         left_finger_name = 'hand_l_distal_link'
         self._finger_names = [left_finger_name, left_finger_name.replace('_l_', '_r_')]
-        obs_size = sum(map(np.size, self._get_obs()))
+        obs_size = np.size(self.prepare_for_network(self._get_obs()))
         assert obs_size != 0
         self.observation_space = spaces.Box(
             -np.inf, np.inf, shape=(obs_size,), dtype=np.float32)
@@ -181,3 +182,6 @@ class PickAndPlaceEnv(MujocoEnv):
         if not self._cheated:
             i['log count'] = {'successes': float(r > 0)}
         return s, r, t, i
+
+    def prepare_for_network(self, observation: np.ndarray):
+        return np.concatenate([observation, self.goal().gripper, self.goal().block])

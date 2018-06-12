@@ -53,7 +53,7 @@ class MujocoEnv:
         self._set_action(action)
         done = self.compute_terminal(self.goal(), self._get_obs())
         reward = self.compute_reward(self.goal(), self._get_obs())
-        return self._get_obs(), reward, done, {}
+        return self.prepare_for_network(self._get_obs()), reward, done, {}
 
     def _set_action(self, action):
         assert np.shape(action) == np.shape(self.sim.ctrl)
@@ -75,7 +75,7 @@ class MujocoEnv:
         self.sim.qpos[:] = qpos.copy()
         self.sim.qvel[:] = qvel.copy()
         self.sim.forward()
-        return self._get_obs()
+        return self.prepare_for_network(self._get_obs())
 
     @abstractmethod
     def reset_qpos(self):
@@ -109,6 +109,10 @@ class MujocoEnv:
 
     @abstractmethod
     def compute_reward(self, goal, obs):
+        raise NotImplementedError
+
+    @abstractmethod
+    def prepare_for_network(self, obs):
         raise NotImplementedError
 
 

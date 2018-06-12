@@ -11,11 +11,6 @@ from environments.pick_and_place import Goal
 from sac.utils import Step
 
 
-class State(namedtuple('State', 'observation achieved_goal desired_goal')):
-    def replace(self, **kwargs):
-        return super()._replace(**kwargs)
-
-
 class HindsightWrapper(gym.Wrapper):
     def __init__(self, env):
         super().__init__(env)
