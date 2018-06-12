@@ -46,8 +46,13 @@ def train(env, seed):
 @click.option('--fixed-block', is_flag=True)
 @click.option('--min-lift-height', default=.02, type=float)
 @click.option('--geofence', default=.4, type=float)
+@click.option('--logdir', type=str)
 def cli(max_steps, steps_per_action, fixed_block, min_lift_height,
-                   geofence, seed):
+                   geofence, seed, logdir):
+    format_strs = ['stdout']
+    if logdir:
+        format_strs += ['tensorboard']
+    logger.configure(format_strs=format_strs, dir=logdir)
     env = TimeLimit(
         max_episode_steps=max_steps,
         env=PickAndPlaceEnv(
