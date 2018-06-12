@@ -1,3 +1,4 @@
+import numpy as np
 import gym
 import numpy as np
 
@@ -69,19 +70,14 @@ def prepare_params(kwargs):
 
     env_name = kwargs['env_name']
 
-    if env_name == 'pick-and-place':
-        import mujoco
-        def make_env():
-            return PickAndPlaceEnv(max_steps=500, random_block=True)
-    else:
-        def make_env():
-            return gym.make(env_name)
+    def make_env():
+        return gym.make(env_name)
     kwargs['make_env'] = make_env
     tmp_env = cached_make_env(kwargs['make_env'])
     assert hasattr(tmp_env, '_max_episode_steps')
     kwargs['T'] = tmp_env._max_episode_steps
     tmp_env.reset()
-    kwargs['max_u'] = np.array(kwargs['max_u']) if type(kwargs['max_u']) == list else kwargs['max_u']
+    kwargs['max_u'] = np.array(kwargs['max_u']) if isinstance(kwargs['max_u'], list) else kwargs['max_u']
     kwargs['gamma'] = 1. - 1. / kwargs['T']
     if 'lr' in kwargs:
         kwargs['pi_lr'] = kwargs['lr']

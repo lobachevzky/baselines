@@ -3,6 +3,7 @@ Helpers for scripts like run_atari.py.
 """
 
 import os
+from mpi4py import MPI
 import gym
 from gym.wrappers import FlattenDictWrapper
 from baselines import logger
@@ -30,9 +31,10 @@ def make_mujoco_env(env_id, seed):
     """
     Create a wrapped, monitored gym.Env for MuJoCo.
     """
-    set_global_seeds(seed)
+    rank = MPI.COMM_WORLD.Get_rank()
+    set_global_seeds(seed + 10000 * rank)
     env = gym.make(env_id)
-    env = Monitor(env, logger.get_dir())
+    env = Monitor(env, os.path.join(logger.get_dir(), str(rank)))
     env.seed(seed)
     return env
 
@@ -74,6 +76,7 @@ def mujoco_arg_parser():
     parser.add_argument('--env', help='environment ID', type=str, default='Reacher-v2')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--num-timesteps', type=int, default=int(1e6))
+    parser.add_argument('--play', default=False, action='store_true')
     return parser
 
 def robotics_arg_parser():
