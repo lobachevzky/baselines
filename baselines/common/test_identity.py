@@ -13,7 +13,7 @@ from baselines.ppo2.policies import MlpPolicy
 
 learn_func_list = [
     lambda e: a2c.learn(policy=MlpPolicy, env=e, seed=0, total_timesteps=50000),
-    lambda e: ppo2.learn(policy=MlpPolicy, env=e, total_timesteps=50000, lr=1e-3, nsteps=128, ent_coef=0.01)
+    lambda e: ppo2.learn(policy=MlpPolicy, env=e, total_time_steps=50000, lr=1e-3, n_steps=128, ent_coef=0.01)
 ]
 
 

@@ -28,12 +28,12 @@ def train(env_id, num_timesteps, seed):
 
     set_global_seeds(seed)
     policy = MlpPolicy
-    model = ppo2.learn(policy=policy, env=env, nsteps=2048, nminibatches=32,
-                       lam=0.95, gamma=0.99, noptepochs=10, log_interval=1,
+    model = ppo2.learn(policy=policy, env=env, n_steps=2048, n_mini_batches=32,
+                       lam=0.95, gamma=0.99, n_opt_epochs=10, log_interval=1,
                        ent_coef=0.0,
                        lr=3e-4,
-                       cliprange=0.2,
-                       total_timesteps=num_timesteps)
+                       clip_range=0.2,
+                       total_time_steps=num_timesteps)
 
     return model, env
 
