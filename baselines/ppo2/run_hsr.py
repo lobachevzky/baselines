@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 import click
 import numpy as np
+import tensorflow as tf
 from gym.wrappers import TimeLimit
 
 from baselines import bench, logger
-from baselines.common.cmd_util import mujoco_arg_parser
-from environments.pick_and_place import PickAndPlaceEnv
 from baselines.common import set_global_seeds
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
 from baselines.ppo2.policies import MlpPolicy
-import tensorflow as tf
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+from environments.pick_and_place import PickAndPlaceEnv
 
 
 def train(env, seed):
@@ -52,10 +51,15 @@ def train(env, seed):
 @click.option('--fixed-block', is_flag=True)
 @click.option('--min-lift-height', default=.02, type=float)
 @click.option('--geofence', default=.4, type=float)
-@click.option('--batch-size', default=32, type=int)
+@click.option('--n-mini-batch', default=32, type=int)
+@click.option('--n-layers', default=2, type=int)
+@click.option('--n-hidden', default=64, type=int)
+@click.option('--n-steps', default=2048, type=int)
+@click.option('--tanh', 'activation', flag_value=tf.nn.tanh, default=True)
+@click.option('--relu', 'activation', flag_value=tf.nn.relu)
 @click.option('--logdir', type=str)
 def cli(max_steps, steps_per_action, fixed_block, min_lift_height,
-        geofence, seed, logdir, batch_size):
+        geofence, seed, logdir, n_mini_batch, n_steps, n_layers, n_hidden, activation):
     format_strs = ['stdout']
     if logdir:
         format_strs += ['tensorboard']
@@ -85,8 +89,15 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height,
     env = VecNormalize(env)
 
     set_global_seeds(seed)
-    policy = MlpPolicy
-    model = ppo2.learn(policy=policy, env=env, n_steps=2048, n_mini_batches=batch_size,
+
+    def policy(*args, **kwargs):
+        return MlpPolicy(
+            # n_hidden=n_hidden,
+            # n_layers=n_layers,
+            # activation=activation,
+            *args, **kwargs)
+
+    model = ppo2.learn(policy=policy, env=env, n_steps=n_steps, n_mini_batches=n_mini_batch,
                        lam=0.95, gamma=0.99, n_opt_epochs=10, log_interval=1,
                        ent_coef=0.0,
                        lr=3e-4,

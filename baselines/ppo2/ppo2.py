@@ -1,13 +1,13 @@
 import os
+import os.path as osp
 import time
+from collections import deque
 
-import gym
 import joblib
 import numpy as np
-import os.path as osp
 import tensorflow as tf
+
 from baselines import logger
-from collections import deque
 from baselines.common import explained_variance
 from baselines.common.runners import AbstractEnvRunner
 
@@ -165,7 +165,7 @@ def const_fn(val):
     return f
 
 
-def learn(*, policy, env: gym.Env, n_steps, total_time_steps, ent_coef, lr,
+def learn(*, policy, env, n_steps, total_time_steps, ent_coef, lr,
           vf_coef=0.5, max_grad_norm=0.5, gamma=0.99, lam=0.95,
           log_interval=10, n_mini_batches=4, n_opt_epochs=4, clip_range=0.2,
           save_interval=0, load_path=None):
