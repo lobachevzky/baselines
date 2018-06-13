@@ -51,7 +51,7 @@ def train(env, seed):
 @click.option('--fixed-block', is_flag=True)
 @click.option('--min-lift-height', default=.02, type=float)
 @click.option('--geofence', default=.4, type=float)
-@click.option('--n-mini-batch', default=4, type=int)
+@click.option('--n-mini-batch', default=32, type=int)
 @click.option('--n-layers', default=2, type=int)
 @click.option('--n-hidden', default=64, type=int)
 @click.option('--n-steps', default=2048, type=int)
