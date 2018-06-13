@@ -92,9 +92,9 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height,
 
     def policy(*args, **kwargs):
         return MlpPolicy(
-            # n_hidden=n_hidden,
-            # n_layers=n_layers,
-            # activation=activation,
+            n_hidden=n_hidden,
+            n_layers=n_layers,
+            activation=activation,
             *args, **kwargs)
 
     model = ppo2.learn(policy=policy, env=env, n_steps=n_steps, n_mini_batches=n_mini_batch,

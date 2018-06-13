@@ -118,7 +118,7 @@ class CnnPolicy(object):
         self.value = value
 
 
-class MlpPolicy(object):
+class MlpPolicyOld(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, reuse=False):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
         with tf.variable_scope("model", reuse=reuse):
@@ -150,7 +150,7 @@ class MlpPolicy(object):
         self.value = value
 
 
-class MlpPolicy2(object):
+class MlpPolicy(object):
     def __init__(self, sess, ob_space, ac_space, n_batch, n_steps,
                  n_hidden, n_layers, activation, reuse=False):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)

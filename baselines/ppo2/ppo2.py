@@ -12,10 +12,6 @@ from baselines.common import explained_variance
 from baselines.common.runners import AbstractEnvRunner
 
 
-# noinspection PyPep8Naming
-from baselines.ppo2.policies import MlpPolicy2
-
-
 class Model(object):
     def __init__(self, *, policy, ob_space, ac_space, n_batch_act, n_batch_train,
                  n_steps, ent_coef, vf_coef, max_grad_norm):
@@ -28,14 +24,6 @@ class Model(object):
 
         act_model = policy(sess, ob_space, ac_space, n_batch_act, 1, reuse=False)
         train_model = policy(sess, ob_space, ac_space, n_batch_train, n_steps, reuse=True)
-        MlpPolicy2(sess, ob_space, ac_space, n_batch_train, n_steps,
-                   n_hidden=64, n_layers=2, activation=tf.nn.tanh, reuse=False)
-        for x in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model'):
-            print(x)
-        print('\n\n')
-        for x in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model2'):
-            print(x)
-        exit()
 
         A = train_model.pdtype.sample_placeholder([None])
         ADV = tf.placeholder(tf.float32, [None])
