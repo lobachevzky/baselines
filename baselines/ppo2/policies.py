@@ -148,3 +148,34 @@ class MlpPolicy(object):
         self.vf = vf
         self.step = step
         self.value = value
+
+
+class MlpPolicy2(object):
+    def __init__(self, sess, ob_space, ac_space, n_batch, n_steps,
+                 n_hidden, n_layers, activation, reuse=False):  # pylint: disable=W0613
+        self.pdtype = make_pdtype(ac_space)
+        with tf.variable_scope("model2", reuse=reuse):
+            X, pi_h = observation_input(ob_space, n_batch)
+            pi_h = vf_h = tf.layers.flatten(pi_h)
+            for i in range(n_layers):
+                pi_h = activation(fc(pi_h, f'pi_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
+                vf_h = activation(fc(vf_h, f'vf_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
+            vf = fc(vf_h, 'vf', 1)[:, 0]
+
+            self.pd, self.pi = self.pdtype.pdfromlatent(pi_h, init_scale=0.01)
+
+        a0 = self.pd.sample()
+        neglogp0 = self.pd.neglogp(a0)
+        self.initial_state = None
+
+        def step(ob, *_args, **_kwargs):
+            a, v, neglogp = sess.run([a0, vf, neglogp0], {X: ob})
+            return a, v, self.initial_state, neglogp
+
+        def value(ob, *_args, **_kwargs):
+            return sess.run(vf, {X: ob})
+
+        self.X = X
+        self.vf = vf
+        self.step = step
+        self.value = value
