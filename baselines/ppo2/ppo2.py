@@ -10,6 +10,7 @@ import tensorflow as tf
 from baselines import logger
 from baselines.common import explained_variance
 from baselines.common.runners import AbstractEnvRunner
+from baselines.ppo2.policies import MlpPolicyOld
 
 
 class Model(object):
@@ -24,6 +25,13 @@ class Model(object):
 
         act_model = policy(sess, ob_space, ac_space, n_batch_act, 1, reuse=False)
         train_model = policy(sess, ob_space, ac_space, n_batch_train, n_steps, reuse=True)
+        MlpPolicyOld(sess, ob_space, ac_space, n_batch_train, n_steps)
+        for x in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='old_model'):
+            print(x)
+        print('\n')
+        for x in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model'):
+            print(x)
+
 
         A = train_model.pdtype.sample_placeholder([None])
         ADV = tf.placeholder(tf.float32, [None])

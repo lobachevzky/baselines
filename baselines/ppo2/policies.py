@@ -121,7 +121,7 @@ class CnnPolicy(object):
 class MlpPolicyOld(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, reuse=False):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
-        with tf.variable_scope("model", reuse=reuse):
+        with tf.variable_scope("old_model", reuse=reuse):
             X, processed_x = observation_input(ob_space, nbatch)
             activ = tf.tanh
             processed_x = tf.layers.flatten(processed_x)
