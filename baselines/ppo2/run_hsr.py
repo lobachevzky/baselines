@@ -14,7 +14,7 @@ from environments.pick_and_place import PickAndPlaceEnv
 
 
 @click.command()
-@click.option('--seed', default=0, type=int)
+@click.option('--seed', default=1, type=int)
 @click.option('--max-steps', default=300, type=int)
 @click.option('--steps-per-action', default=200, type=int)
 @click.option('--fixed-block', is_flag=True)
@@ -23,10 +23,10 @@ from environments.pick_and_place import PickAndPlaceEnv
 @click.option('--max-grad-norm', default=.5, type=float)
 @click.option('--n-mini-batch', default=32, type=int)
 @click.option('--n-layers', default=2, type=int)
-@click.option('--n-hidden', default=64, type=int)
+@click.option('--n-hidden', default=128, type=int)
 @click.option('--n-steps', default=2048, type=int)
-@click.option('--tanh', 'activation', flag_value=tf.nn.tanh, default=True)
-@click.option('--relu', 'activation', flag_value=tf.nn.relu)
+@click.option('--tanh', 'activation', flag_value=tf.nn.tanh)
+@click.option('--relu', 'activation', flag_value=tf.nn.relu, default=True)
 @click.option('--logdir', type=str)
 def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, seed,
         logdir, n_mini_batch, n_steps, n_layers, n_hidden, activation, max_grad_norm):
