@@ -10,12 +10,11 @@ import tensorflow as tf
 from baselines import logger
 from baselines.common import explained_variance
 from baselines.common.runners import AbstractEnvRunner
-from baselines.ppo2.policies import MlpPolicyOld
 
 
 class Model(object):
     def __init__(self, *, policy, ob_space, ac_space, n_batch_act, n_batch_train,
-                 n_steps, ent_coef, vf_coef, max_grad_norm):
+                 n_steps, ent_coef, vf_coef, max_grad_norm, predict_loss):
         """
         :param n_batch_act: size of inference batch (more than 1 because of stacked envs)
         :param n_batch_train: size of train batch
@@ -25,13 +24,6 @@ class Model(object):
 
         act_model = policy(sess, ob_space, ac_space, n_batch_act, 1, reuse=False)
         train_model = policy(sess, ob_space, ac_space, n_batch_train, n_steps, reuse=True)
-        MlpPolicyOld(sess, ob_space, ac_space, n_batch_train, n_steps)
-        for x in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='old_model'):
-            print(x)
-        print('\n')
-        for x in tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='model'):
-            print(x)
-
 
         A = train_model.pdtype.sample_placeholder([None])
         ADV = tf.placeholder(tf.float32, [None])
@@ -56,6 +48,11 @@ class Model(object):
         approx_kl = .5 * tf.reduce_mean(tf.square(neg_log_pac - OLD_NEG_LOG_PAC))
         clip_frac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIP_RANGE)))
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
+        if predict_loss:
+            # pre_clip_loss = tf.stop_gradient(tf.reduce_mean(tf.abs(vf_losses1)))
+            pre_clip_loss = vf_loss
+            lp_loss = .5 * tf.reduce_mean(tf.square(train_model.lp - pre_clip_loss))
+            loss += lp_loss
         with tf.variable_scope('model'):
             params = tf.trainable_variables()
         grads = tf.gradients(loss, params)
@@ -79,12 +76,16 @@ class Model(object):
             if states is not None:
                 feed_dict[train_model.S] = states
                 feed_dict[train_model.M] = masks
-            return sess.run(
-                [pg_loss, vf_loss, entropy, approx_kl, clip_frac, _train],
-                feed_dict
-            )[:-1]
+            fetch = [pg_loss, vf_loss, entropy, approx_kl, clip_frac, _train]
+            if predict_loss:
+                run = sess.run([lp_loss, train_model.lp, pre_clip_loss] + fetch, feed_dict)
+                return run[3:-1]
+            else:
+                return sess.run(fetch, feed_dict)[:-1]
 
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
+        if predict_loss:
+            self.loss_names += ['prediction_loss']
 
         def save(save_path):
             ps = sess.run(params)
@@ -173,6 +174,7 @@ def const_fn(val):
 
 
 def learn(*, policy, env, n_steps, total_time_steps, ent_coef, lr,
+          predict_loss,
           vf_coef=0.5, max_grad_norm=0.5, gamma=0.99, lam=0.95,
           log_interval=10, n_mini_batches=4, n_opt_epochs=4, clip_range=0.2,
           save_interval=0, load_path=None):
@@ -211,7 +213,8 @@ def learn(*, policy, env, n_steps, total_time_steps, ent_coef, lr,
                      n_batch_act=n_env,
                      n_batch_train=n_batch_train,
                      n_steps=n_steps, ent_coef=ent_coef, vf_coef=vf_coef,
-                     max_grad_norm=max_grad_norm)
+                     max_grad_norm=max_grad_norm,
+                     predict_loss=predict_loss)
 
     if save_interval and logger.get_dir():
         import cloudpickle

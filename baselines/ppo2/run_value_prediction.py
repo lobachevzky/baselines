@@ -62,9 +62,12 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, see
 
     def policy(*args, **kwargs):
         return MlpPolicy(
-            n_hidden=n_hidden,
-            n_layers=n_layers,
-            activation=activation,
+            n_hidden=128,
+            n_layers=2,
+            activation=tf.nn.relu,
+            n_lp_layers=n_layers,
+            n_lp_hidden=n_hidden,
+            lp_activation=activation,
             *args, **kwargs)
 
     model = ppo2.learn(policy=policy, env=env, n_steps=n_steps, n_mini_batches=n_mini_batch,
@@ -74,7 +77,7 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, see
                        lr=3e-4,
                        clip_range=0.2,
                        total_time_steps=1e20,
-                       predict_loss=False)
+                       predict_loss=True)
 
     # Run trained model
     logger.log("Running trained model")

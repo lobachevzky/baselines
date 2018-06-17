@@ -152,15 +152,18 @@ class MlpPolicyOld(object):
 
 class MlpPolicy(object):
     def __init__(self, sess, ob_space, ac_space, n_batch, n_steps,
-                 n_hidden, n_layers, activation, reuse=False):  # pylint: disable=W0613
+                 n_hidden, n_layers, activation, n_lp_layers=0, n_lp_hidden=0, lp_activation=None, reuse=False):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
         with tf.variable_scope("model2", reuse=reuse):
             X, pi_h = observation_input(ob_space, n_batch)
-            pi_h = vf_h = tf.layers.flatten(pi_h)
+            pi_h = vf_h = lp_h = tf.layers.flatten(pi_h)
             for i in range(n_layers):
                 pi_h = activation(fc(pi_h, f'pi_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
                 vf_h = activation(fc(vf_h, f'vf_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
+            for i in range(n_lp_layers):
+                lp_h = lp_activation(fc(lp_h, f'lp_fc{i + 1}', nh=n_lp_hidden, init_scale=np.sqrt(2)))
             vf = fc(vf_h, 'vf', 1)[:, 0]
+            lp = fc(lp_h, 'lp', 1)[:, 0]
 
             self.pd, self.pi = self.pdtype.pdfromlatent(pi_h, init_scale=0.01)
 
@@ -177,5 +180,7 @@ class MlpPolicy(object):
 
         self.X = X
         self.vf = vf
+        self.lp = lp
         self.step = step
         self.value = value
+
