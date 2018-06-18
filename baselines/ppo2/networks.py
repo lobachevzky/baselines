@@ -1,7 +1,10 @@
 import abc
+from typing import List
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.python.ops.rnn_cell_impl import MultiRNNCell, BasicLSTMCell, LSTMStateTuple
+
 from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
 from baselines.common.distributions import make_pdtype
 from baselines.common.input import observation_input
@@ -152,7 +155,8 @@ class MlpPolicyOld(object):
 
 class MlpPolicy(object):
     def __init__(self, sess, ob_space, ac_space, n_batch, n_steps,
-                 n_hidden, n_layers, activation, n_lp_layers=0, n_lp_hidden=0, lp_activation=None, reuse=False):  # pylint: disable=W0613
+                 n_hidden, n_layers, activation, n_lp_layers=0, n_lp_hidden=0, lp_activation=None,
+                 reuse=False):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
         with tf.variable_scope("model2", reuse=reuse):
             X, pi_h = observation_input(ob_space, n_batch)
@@ -179,6 +183,48 @@ class MlpPolicy(object):
             return sess.run(vf, {X: ob})
 
         self.X = X
+        self.vf = vf
+        self.lp = lp
+        self.step = step
+        self.value = value
+
+
+class MlpPolicyLSTMPred:
+    def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_hidden, n_layers,
+                 activation, n_cells, n_lstm=256, reuse=False):
+        self.pdtype = make_pdtype(ac_space)
+        n_batch = n_env * n_steps
+        X, pi_h = observation_input(ob_space, n_batch)
+
+        M = tf.placeholder(tf.float32, [n_batch])  # mask (done t-1)
+        S = tf.placeholder(tf.float32, [n_env, n_lstm * 2])  # states
+        with tf.variable_scope("model", reuse=reuse):
+            xs = batch_to_seq(X, n_env, n_steps)
+            ms = batch_to_seq(M, n_env, n_steps)
+            h5, snew = lstm(xs, ms, S, 'lstm1', nh=n_lstm)
+            h5 = seq_to_batch(h5)
+            lp = fc(h5, 'v', 1)
+            pi_h = vf_h = tf.layers.flatten(pi_h)
+            for i in range(n_layers):
+                pi_h = activation(fc(pi_h, f'pi_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
+                vf_h = activation(fc(vf_h, f'vf_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
+            pi_h = vf_h = tf.layers.flatten(pi_h)
+            vf = fc(vf_h, 'vf', 1)[:, 0]
+            self.pd, self.pi = self.pdtype.pdfromlatent(pi_h)
+
+        a0 = self.pd.sample()
+        neglogp0 = self.pd.neglogp(a0)
+        self.initial_state = np.zeros((n_env, n_lstm * 2), dtype=np.float32)
+
+        def step(ob, state, mask):
+            return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
+
+        def value(ob, state, mask):
+            return sess.run(vf, {X: ob, S: state, M: mask})
+
+        self.X = X
+        self.M = M
+        self.S = S
         self.vf = vf
         self.lp = lp
         self.step = step

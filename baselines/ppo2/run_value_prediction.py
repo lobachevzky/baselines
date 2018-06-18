@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 import click
 import numpy as np
 import tensorflow as tf
@@ -9,7 +10,7 @@ from baselines.common import set_global_seeds
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
-from baselines.ppo2.policies import MlpPolicy
+from baselines.ppo2.networks import MlpPolicy, MlpPolicyLSTMPred
 from environments.pick_and_place import PickAndPlaceEnv
 
 
@@ -21,15 +22,18 @@ from environments.pick_and_place import PickAndPlaceEnv
 @click.option('--min-lift-height', default=.02, type=float)
 @click.option('--geofence', default=.4, type=float)
 @click.option('--max-grad-norm', default=.5, type=float)
-@click.option('--n-mini-batch', default=32, type=int)
+@click.option('--n-mini-batch', default=1, type=int)
 @click.option('--n-layers', default=2, type=int)
+@click.option('--n-env', default=1, type=int)
 @click.option('--n-hidden', default=128, type=int)
-@click.option('--n-steps', default=2048, type=int)
+@click.option('--n-steps', default=300, type=int)
+@click.option('--mlp', 'network', flag_value='mlp', default=True)
+@click.option('--lstm', 'network', flag_value='lstm')
 @click.option('--tanh', 'activation', flag_value=tf.nn.tanh)
 @click.option('--relu', 'activation', flag_value=tf.nn.relu, default=True)
 @click.option('--logdir', type=str)
-def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, seed,
-        logdir, n_mini_batch, n_steps, n_layers, n_hidden, activation, max_grad_norm):
+def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, seed, network,
+        logdir, n_mini_batch, n_steps, n_layers, n_hidden, activation, max_grad_norm, n_env):
     format_strs = ['stdout']
     if logdir:
         format_strs += ['tensorboard']
@@ -60,15 +64,30 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, see
 
     set_global_seeds(seed)
 
-    def policy(*args, **kwargs):
-        return MlpPolicy(
-            n_hidden=128,
-            n_layers=2,
-            activation=tf.nn.relu,
-            n_lp_layers=n_layers,
-            n_lp_hidden=n_hidden,
-            lp_activation=activation,
-            *args, **kwargs)
+    def policy(*args, n_batch, n_steps, **kwargs):
+        if network == 'mlp':
+            return MlpPolicy(
+                n_hidden=128,
+                n_layers=2,
+                activation=tf.nn.relu,
+                n_lp_layers=n_layers,
+                n_lp_hidden=n_hidden,
+                lp_activation=activation,
+                n_batch=env.num_envs,
+                n_steps=n_steps,
+                *args, **kwargs)
+        elif network == 'lstm':
+            assert n_env % n_mini_batch == 0
+            assert n_steps * n_env == n_batch
+            return MlpPolicyLSTMPred(
+                n_hidden=128,
+                n_layers=2,
+                activation=tf.nn.relu,
+                n_cells=1,
+                n_lstm=256,
+                n_env=n_env,
+                n_steps=n_steps,
+                *args, **kwargs)
 
     model = ppo2.learn(policy=policy, env=env, n_steps=n_steps, n_mini_batches=n_mini_batch,
                        max_grad_norm=max_grad_norm,

@@ -22,8 +22,18 @@ class Model(object):
         """
         sess = tf.get_default_session()
 
-        act_model = policy(sess, ob_space, ac_space, n_batch_act, 1, reuse=False)
-        train_model = policy(sess, ob_space, ac_space, n_batch_train, n_steps, reuse=True)
+        act_model = policy(sess=sess,
+                           ob_space=ob_space,
+                           ac_space=ac_space,
+                           n_batch=n_batch_act,
+                           n_steps=1,
+                           reuse=False)
+        train_model = policy(sess=sess,
+                             ob_space=ob_space,
+                             ac_space=ac_space,
+                             n_batch=n_batch_train,
+                             n_steps=n_steps,
+                             reuse=True)
 
         A = train_model.pdtype.sample_placeholder([None])
         ADV = tf.placeholder(tf.float32, [None])
@@ -49,8 +59,7 @@ class Model(object):
         clip_frac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIP_RANGE)))
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
         if predict_loss:
-            # pre_clip_loss = tf.stop_gradient(tf.reduce_mean(tf.abs(vf_losses1)))
-            pre_clip_loss = vf_loss
+            pre_clip_loss = tf.stop_gradient(tf.abs(vf_losses1))
             lp_loss = .5 * tf.reduce_mean(tf.square(train_model.lp - pre_clip_loss))
             loss += lp_loss
         with tf.variable_scope('model'):
@@ -78,10 +87,8 @@ class Model(object):
                 feed_dict[train_model.M] = masks
             fetch = [pg_loss, vf_loss, entropy, approx_kl, clip_frac, _train]
             if predict_loss:
-                run = sess.run([lp_loss, train_model.lp, pre_clip_loss] + fetch, feed_dict)
-                return run[3:-1]
-            else:
-                return sess.run(fetch, feed_dict)[:-1]
+                fetch = [lp_loss] + fetch
+            return sess.run(fetch, feed_dict)[:-1]
 
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
         if predict_loss:

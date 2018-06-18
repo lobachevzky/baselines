@@ -8,7 +8,7 @@ def train(env_id, num_timesteps, seed):
     from baselines.common import set_global_seeds
     from baselines.common.vec_env.vec_normalize import VecNormalize
     from baselines.ppo2 import ppo2
-    from baselines.ppo2.policies import MlpPolicy
+    from baselines.ppo2.networks import MlpPolicy
     import gym
     import tensorflow as tf
     from baselines.common.vec_env.dummy_vec_env import DummyVecEnv

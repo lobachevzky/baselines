@@ -9,7 +9,7 @@ from baselines.common import set_global_seeds
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
-from baselines.ppo2.policies import MlpPolicy
+from baselines.ppo2.networks import MlpPolicy
 from environments.pick_and_place import PickAndPlaceEnv
 
 
@@ -21,7 +21,6 @@ from environments.pick_and_place import PickAndPlaceEnv
 @click.option('--min-lift-height', default=.02, type=float)
 @click.option('--geofence', default=.4, type=float)
 @click.option('--max-grad-norm', default=.5, type=float)
-@click.option('--n-mini-batch', default=32, type=int)
 @click.option('--n-layers', default=2, type=int)
 @click.option('--n-hidden', default=128, type=int)
 @click.option('--n-steps', default=2048, type=int)

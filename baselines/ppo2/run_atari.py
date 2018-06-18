@@ -4,7 +4,7 @@ from baselines import logger
 from baselines.common.cmd_util import make_atari_env, atari_arg_parser
 from baselines.common.vec_env.vec_frame_stack import VecFrameStack
 from baselines.ppo2 import ppo2
-from baselines.ppo2.policies import CnnPolicy, LstmPolicy, LnLstmPolicy, MlpPolicy
+from baselines.ppo2.networks import CnnPolicy, LstmPolicy, LnLstmPolicy, MlpPolicy
 import multiprocessing
 import tensorflow as tf
 
