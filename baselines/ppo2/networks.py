@@ -3,6 +3,7 @@ from typing import List
 
 import numpy as np
 import tensorflow as tf
+from tensorflow.contrib.rnn import LSTMBlockFusedCell
 from tensorflow.python.ops.rnn_cell_impl import MultiRNNCell, BasicLSTMCell, LSTMStateTuple
 
 from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
@@ -158,7 +159,7 @@ class MlpPolicy(object):
                  n_hidden, n_layers, activation, n_lp_layers=0, n_lp_hidden=0, lp_activation=None,
                  reuse=False):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
-        with tf.variable_scope("model2", reuse=reuse):
+        with tf.variable_scope("model", reuse=reuse):
             X, pi_h = observation_input(ob_space, n_batch)
             pi_h = vf_h = lp_h = tf.layers.flatten(pi_h)
             for i in range(n_layers):
@@ -197,10 +198,9 @@ class MlpPolicyLSTMPred:
         X, pi_h = observation_input(ob_space, n_batch)
 
         M = tf.placeholder(tf.float32, [n_batch])  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [n_env, n_lstm * 2])  # states
+        S = LSTMStateTuple(c=tf.placeholder(tf.float32, [n_env, n_lstm]),
+                           h=tf.placeholder(tf.float32, [n_env, n_lstm]),)
         with tf.variable_scope("model", reuse=reuse):
-            xs = batch_to_seq(X, n_env, n_steps)
-            ms = batch_to_seq(M, n_env, n_steps)
             pi_h = vf_h = tf.layers.flatten(pi_h)
             for i in range(n_layers):
                 pi_h = activation(fc(pi_h, f'pi_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
@@ -210,19 +210,25 @@ class MlpPolicyLSTMPred:
             self.pd, self.pi = self.pdtype.pdfromlatent(pi_h)
 
         with tf.variable_scope("self_model", reuse=reuse):
-            h, s_new = lstm(xs, ms, S, f'lstm{i+1}', nh=n_lstm)
-            h5 = seq_to_batch(h)
+            x = tf.reshape(X, [n_env, n_steps, -1])
+            h, s_new = LSTMBlockFusedCell(n_lstm)(x, S)
+            h5 = tf.reshape(h, [n_batch, -1])
             lp = fc(h5, 'v', 1)
 
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        self.initial_state = np.zeros((n_env, n_lstm * 2), dtype=np.float32)
+        # self.initial_state = np.zeros((n_env, n_lstm * 2), dtype=np.float32)
+        self.initial_state = LSTMStateTuple(c=np.zeros([n_env, n_lstm], np.float32),
+                                            h=np.zeros([n_env, n_lstm], np.float32))
 
-        def step(ob, state, mask):
-            return sess.run([a0, vf, s_new, neglogp0], {X: ob, S: state, M: mask})
+        def state_feed(state: LSTMStateTuple):
+            return {ph: array for ph, array in zip(S, state)}
 
-        def value(ob, state, mask):
-            return sess.run(vf, {X: ob, S: state, M: mask})
+        def step(ob, state, _):
+            return sess.run([a0, vf, s_new, neglogp0], {**{X: ob}, **state_feed(state)})
+
+        def value(ob, state, _):
+            return sess.run(vf, {**{X: ob}, **state_feed(state)})
 
         self.X = X
         self.M = M
