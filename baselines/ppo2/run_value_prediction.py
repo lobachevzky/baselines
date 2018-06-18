@@ -83,7 +83,7 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, see
                 n_hidden=128,
                 n_layers=2,
                 activation=tf.nn.relu,
-                n_cells=1,
+                n_cells=2,
                 n_lstm=256,
                 n_env=n_env,
                 n_steps=n_steps,

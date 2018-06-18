@@ -201,9 +201,6 @@ class MlpPolicyLSTMPred:
         with tf.variable_scope("model", reuse=reuse):
             xs = batch_to_seq(X, n_env, n_steps)
             ms = batch_to_seq(M, n_env, n_steps)
-            h5, snew = lstm(xs, ms, S, 'lstm1', nh=n_lstm)
-            h5 = seq_to_batch(h5)
-            lp = fc(h5, 'v', 1)
             pi_h = vf_h = tf.layers.flatten(pi_h)
             for i in range(n_layers):
                 pi_h = activation(fc(pi_h, f'pi_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
@@ -212,12 +209,17 @@ class MlpPolicyLSTMPred:
             vf = fc(vf_h, 'vf', 1)[:, 0]
             self.pd, self.pi = self.pdtype.pdfromlatent(pi_h)
 
+        with tf.variable_scope("self_model", reuse=reuse):
+            h, s_new = lstm(xs, ms, S, f'lstm{i+1}', nh=n_lstm)
+            h5 = seq_to_batch(h)
+            lp = fc(h5, 'v', 1)
+
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
         self.initial_state = np.zeros((n_env, n_lstm * 2), dtype=np.float32)
 
         def step(ob, state, mask):
-            return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
+            return sess.run([a0, vf, s_new, neglogp0], {X: ob, S: state, M: mask})
 
         def value(ob, state, mask):
             return sess.run(vf, {X: ob, S: state, M: mask})
