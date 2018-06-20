@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
 from baselines.common.distributions import make_pdtype
-from baselines.common.input import observation_input
+from baselines.common.input import get_inputs
 
 def nature_cnn(unscaled_images, **conv_kwargs):
     """
@@ -20,7 +20,7 @@ def nature_cnn(unscaled_images, **conv_kwargs):
 class LnLstmPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, nlstm=256, reuse=False):
         nenv = nbatch // nsteps
-        X, processed_x = observation_input(ob_space, nbatch)
+        X, processed_x = get_inputs(ob_space, nbatch)
         M = tf.placeholder(tf.float32, [nbatch]) #mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, nlstm*2]) #states
         self.pdtype = make_pdtype(ac_space)
@@ -56,7 +56,7 @@ class LstmPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, nlstm=256, reuse=False):
         nenv = nbatch // nsteps
         self.pdtype = make_pdtype(ac_space)
-        X, processed_x = observation_input(ob_space, nbatch)
+        X, processed_x = get_inputs(ob_space, nbatch)
 
         M = tf.placeholder(tf.float32, [nbatch]) #mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, nlstm*2]) #states
@@ -91,7 +91,7 @@ class CnnPolicy(object):
 
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, reuse=False, **conv_kwargs): #pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
-        X, processed_x = observation_input(ob_space, nbatch)
+        X, processed_x = get_inputs(ob_space, nbatch)
         with tf.variable_scope("model", reuse=reuse):
             h = nature_cnn(processed_x, **conv_kwargs)
             vf = fc(h, 'v', 1)[:,0]
@@ -117,7 +117,7 @@ class MlpPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, reuse=False): #pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
         with tf.variable_scope("model", reuse=reuse):
-            X, processed_x = observation_input(ob_space, nbatch)
+            X, processed_x = get_inputs(ob_space, nbatch)
             activ = tf.tanh
             processed_x = tf.layers.flatten(processed_x)
             pi_h1 = activ(fc(processed_x, 'pi_fc1', nh=64, init_scale=np.sqrt(2)))

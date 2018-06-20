@@ -3,12 +3,13 @@ from typing import List
 
 import numpy as np
 import tensorflow as tf
+from gym import spaces
 from tensorflow.contrib.rnn import LSTMBlockFusedCell
 from tensorflow.python.ops.rnn_cell_impl import MultiRNNCell, BasicLSTMCell, LSTMStateTuple
 
-from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm
+from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lstm, lnlstm, ortho_init
 from baselines.common.distributions import make_pdtype
-from baselines.common.input import observation_input
+from baselines.common.input import get_inputs
 
 
 def nature_cnn(unscaled_images, **conv_kwargs):
@@ -28,7 +29,7 @@ def nature_cnn(unscaled_images, **conv_kwargs):
 class LnLstmPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, nlstm=256, reuse=False):
         nenv = nbatch // nsteps
-        X, processed_x = observation_input(ob_space, nbatch)
+        X, processed_x = get_inputs(ob_space, nbatch)
         M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, nlstm * 2])  # states
         self.pdtype = make_pdtype(ac_space)
@@ -64,7 +65,7 @@ class LstmPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, nlstm=256, reuse=False):
         nenv = nbatch // nsteps
         self.pdtype = make_pdtype(ac_space)
-        X, processed_x = observation_input(ob_space, nbatch)
+        X, processed_x = get_inputs(ob_space, nbatch)
 
         M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
         S = tf.placeholder(tf.float32, [nenv, nlstm * 2])  # states
@@ -99,7 +100,7 @@ class LstmPolicy(object):
 class CnnPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, reuse=False, **conv_kwargs):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
-        X, processed_x = observation_input(ob_space, nbatch)
+        X, processed_x = get_inputs(ob_space, nbatch)
         with tf.variable_scope("model", reuse=reuse):
             h = nature_cnn(processed_x, **conv_kwargs)
             vf = fc(h, 'v', 1)[:, 0]
@@ -126,7 +127,7 @@ class MlpPolicyOld(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, reuse=False):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
         with tf.variable_scope("old_model", reuse=reuse):
-            X, processed_x = observation_input(ob_space, nbatch)
+            X, processed_x = get_inputs(ob_space, nbatch)
             activ = tf.tanh
             processed_x = tf.layers.flatten(processed_x)
             pi_h1 = activ(fc(processed_x, 'pi_fc1', nh=64, init_scale=np.sqrt(2)))
@@ -160,7 +161,7 @@ class MlpPolicy(object):
                  reuse=False):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
         with tf.variable_scope("model", reuse=reuse):
-            X, pi_h = observation_input(ob_space, n_batch)
+            X, pi_h = get_inputs(ob_space, n_batch)
             pi_h = vf_h = lp_h = tf.layers.flatten(pi_h)
             for i in range(n_layers):
                 pi_h = activation(fc(pi_h, f'pi_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
@@ -190,51 +191,87 @@ class MlpPolicy(object):
         self.value = value
 
 
-class MlpPolicyLSTMPred:
+class MlpPolicyWithMemory:
+    # noinspection PyPep8Naming
     def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_hidden, n_layers,
-                 activation, n_cells, n_lstm=256, reuse=False):
+                 activation, n_memory, size_memory, reuse=False):
+        def dense(x, scope: str, reuse: bool = False):
+            return activation(fc(x, scope=scope, nh=n_hidden,
+                                 init_scale=np.sqrt(2), reuse=reuse))
+
         self.pdtype = make_pdtype(ac_space)
         n_batch = n_env * n_steps
-        X, pi_h = observation_input(ob_space, n_batch)
+        assert isinstance(ob_space, spaces.Dict)
+        input_dict = get_inputs(ob_space, n_batch)
+        G, goal_h = input_dict['goal']
+        ob_shape = [n_batch] + list(ob_space.shape)
+        with tf.control_dependencies(tf.Assert(tf.shape(goal_h) == ob_shape)):
+            O, obs_h = input_dict['obs']
+        with tf.control_dependencies(tf.Assert(tf.shape(obs_h) == ob_shape)):
+            A, action_h = get_inputs(ac_space, n_batch)
+        with tf.control_dependencies(tf.Assert(tf.shape(action_h) == [n_batch] + list(ac_space.shape))):
+            mem_shape = [n_batch, n_memory, size_memory]
+            self.initial_state = ortho_init()(mem_shape)
+            M = tf.placeholder(tf.float32, mem_shape)
 
-        M = tf.placeholder(tf.float32, [n_batch])  # mask (done t-1)
-        S = LSTMStateTuple(c=tf.placeholder(tf.float32, [n_env, n_lstm]),
-                           h=tf.placeholder(tf.float32, [n_env, n_lstm]),)
-        with tf.variable_scope("model", reuse=reuse):
-            pi_h = vf_h = tf.layers.flatten(pi_h)
+        def c(h):
+            with tf.control_dependencies(tf.Assert(tf.shape(h) == [n_batch, n_hidden])):
+                key = tf.expand_dims(h, axis=1)
+            with tf.control_dependencies(tf.Assert(tf.shape(key) == [n_batch, 1, n_hidden])):
+                prod = key * M
+            with tf.control_dependencies(tf.Assert(tf.shape(prod) == mem_shape)):
+                sim = tf.reduce_sum(prod, axis=1, keepdims=True)
+            with tf.control_dependencies(tf.Assert(tf.shape(sim) == [n_batch, 1, n_hidden])):
+                return tf.nn.softmax(sim, axis=1)
+
+        with tf.variable_scope("network", reuse=reuse):
             for i in range(n_layers):
-                pi_h = activation(fc(pi_h, f'pi_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
-                vf_h = activation(fc(vf_h, f'vf_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
-            pi_h = vf_h = tf.layers.flatten(pi_h)
-            vf = fc(vf_h, 'vf', 1)[:, 0]
-            self.pd, self.pi = self.pdtype.pdfromlatent(pi_h)
+                obs_h = dense(obs_h, f'obs_fc{i + 1}')
+                with tf.control_dependencies(tf.Assert(tf.shape(obs_h) == [n_batch, n_hidden])):
+                    action_h = dense(action_h, f'action_fc{i + 1}')
+                with tf.control_dependencies(tf.Assert(tf.shape(action_h) == [n_batch, n_hidden])):
+                    goal_h = dense(goal_h, f'obs_fc{i + 1}', reuse=True)
+            with tf.control_dependencies(tf.Assert(tf.shape(goal_h) == [n_batch, n_hidden])):
+                h = tf.concat([goal_h, obs_h])
+            with tf.control_dependencies(tf.Assert(tf.shape(h) == [n_batch, n_hidden * 2])):
+                vf = fc(h, 'vf', 1)[:, 0]
+                self.pd, self.pi = self.pdtype.pdfromlatent(h)
 
-        with tf.variable_scope("self_model", reuse=reuse):
-            x = tf.reshape(X, [n_env, n_steps, -1])
-            h, s_new = LSTMBlockFusedCell(n_lstm)(x, S)
-            h5 = tf.reshape(h, [n_batch, -1])
-            lp = fc(h5, 'v', 1)
+            oa_h = dense(obs_h, 'obs_fc_final') + dense(action_h, 'action_fc_final')
+            with tf.control_dependencies(tf.Assert(tf.shape(oa_h) == [n_batch, n_hidden])):
+                oa_h -= tf.reduce_mean(oa_h, axis=1)
+            with tf.control_dependencies(tf.Assert(tf.shape(oa_h) == [n_batch, n_hidden])):
+                goal_h = dense(goal_h, 'goal_fc_final')
+            c_oa = c(oa_h)
+            with tf.control_dependencies(tf.Assert(tf.shape(c_oa) == [n_batch, n_memory])):
+                c_g = c(goal_h)
+            with tf.control_dependencies(tf.Assert(tf.shape(c_oa) == [n_batch, n_memory])):
+                M_new = M + (tf.expand_dims(oa_h, axis=1) *
+                             tf.expand_dims(c_oa, axis=2))
+
+            c_oa = tf.distributions.Categorical(c_oa)
+            c_g = tf.distributions.Categorical(c_g)
+            divergence = tf.distributions.kl_divergence(c_oa, c_g)
+            with tf.control_dependencies(tf.Assert(tf.shape(divergence) == [n_batch, 1])):
+                qf = 1 / divergence
+                qf /= 1 + qf
 
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        # self.initial_state = np.zeros((n_env, n_lstm * 2), dtype=np.float32)
-        self.initial_state = LSTMStateTuple(c=np.zeros([n_env, n_lstm], np.float32),
-                                            h=np.zeros([n_env, n_lstm], np.float32))
 
-        def state_feed(state: LSTMStateTuple):
-            return {ph: array for ph, array in zip(S, state)}
+        def ob_feed(ob):
+            return {self.X[k]: ob[k] for k in ob}
 
-        def step(ob, state, _):
-            return sess.run([a0, vf, s_new, neglogp0], {**{X: ob}, **state_feed(state)})
+        def step(ob, memory, _):
+            return sess.run([a0, vf, M_new, neglogp0], {**{ob_feed(ob)}, M: memory})
 
-        def value(ob, state, _):
-            return sess.run(vf, {**{X: ob}, **state_feed(state)})
+        def value(ob, memory, _):
+            return sess.run(vf, {**{ob_feed(ob)}, M: memory})
 
-        self.X = X
+        self.X = dict(goal=G, obs=O)
         self.M = M
-        self.S = S
+        self.S = None
         self.vf = vf
-        self.lp = lp
+        self.qf = qf
         self.step = step
         self.value = value
-

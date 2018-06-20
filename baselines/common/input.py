@@ -1,7 +1,7 @@
 import tensorflow as tf
-from gym.spaces import Discrete, Box
+from gym.spaces import Discrete, Box, Dict
 
-def observation_input(ob_space, batch_size=None, name='Ob'):
+def get_inputs(space, batch_size=None, name='Ob'):
     '''
     Build observation input with encoding depending on the 
     observation space type
@@ -13,17 +13,19 @@ def observation_input(ob_space, batch_size=None, name='Ob'):
 
     returns: tuple (input_placeholder, processed_input_tensor)
     '''
-    if isinstance(ob_space, Discrete):
+    if isinstance(space, Discrete):
         input_x  = tf.placeholder(shape=(batch_size,), dtype=tf.int32, name=name)
-        processed_x = tf.to_float(tf.one_hot(input_x, ob_space.n))
+        processed_x = tf.to_float(tf.one_hot(input_x, space.n))
         return input_x, processed_x
 
-    elif isinstance(ob_space, Box):
-        input_shape = (batch_size,) + ob_space.shape
-        input_x = tf.placeholder(shape=input_shape, dtype=ob_space.dtype, name=name)
+    elif isinstance(space, Box):
+        input_shape = (batch_size,) + space.shape
+        input_x = tf.placeholder(shape=input_shape, dtype=space.dtype, name=name)
         processed_x = tf.to_float(input_x)
         return input_x, processed_x
-
+    elif isinstance(space, Dict):
+        return {k: get_inputs(space)
+                for k, space in space.spaces.items()}
     else:
         raise NotImplementedError
 

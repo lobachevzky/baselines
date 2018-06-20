@@ -10,7 +10,7 @@ from baselines.common import set_global_seeds
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
-from baselines.ppo2.networks import MlpPolicy, MlpPolicyLSTMPred
+from baselines.ppo2.networks import MlpPolicy, MlpPolicyWithMemory
 from environments.pick_and_place import PickAndPlaceEnv
 
 
@@ -79,12 +79,11 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, see
         elif network == 'lstm':
             assert n_env % n_mini_batch == 0
             assert n_steps * n_env == n_batch
-            return MlpPolicyLSTMPred(
+            return MlpPolicyWithMemory(
                 n_hidden=128,
                 n_layers=2,
                 activation=tf.nn.relu,
                 n_cells=2,
-                n_lstm=256,
                 n_env=n_env,
                 n_steps=n_steps,
                 *args, **kwargs)
@@ -96,7 +95,7 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, see
                        lr=3e-4,
                        clip_range=0.2,
                        total_time_steps=1e20,
-                       predict_loss=True)
+                       remember_states=True)
 
     # Run trained model
     logger.log("Running trained model")

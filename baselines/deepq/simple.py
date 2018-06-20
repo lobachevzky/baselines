@@ -10,7 +10,7 @@ import baselines.common.tf_util as U
 from baselines.common.tf_util import load_state, save_state
 from baselines import logger
 from baselines.common.schedules import LinearSchedule
-from baselines.common.input import observation_input
+from baselines.common.input import get_inputs
 
 from baselines import deepq
 from baselines.deepq.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer

@@ -25,7 +25,7 @@ setup(name='baselines',
       ],
       entry_points=dict(console_scripts=[
           'pick-and-place=baselines.ppo2.run_hsr:cli',
-          'value-prediction=baselines.ppo2.run_value_prediction:cli',
+          'mem=baselines.ppo2.run_memory:cli',
       ]),
       description='OpenAI baselines: high quality implementations of reinforcement learning algorithms',
       author='OpenAI',

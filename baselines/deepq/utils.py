@@ -1,4 +1,4 @@
-from baselines.common.input import observation_input
+from baselines.common.input import get_inputs
 
 import tensorflow as tf
 
@@ -74,7 +74,7 @@ class ObservationInput(PlaceholderTfInput):
         name: str 
                 tensorflow name of the underlying placeholder
         """
-        inpt, self.processed_inpt = observation_input(observation_space, name=name)
+        inpt, self.processed_inpt = get_inputs(observation_space, name=name)
         super().__init__(inpt)
 
     def get(self):
