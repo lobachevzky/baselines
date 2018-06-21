@@ -1,4 +1,5 @@
 import abc
+from contextlib import contextmanager
 from typing import List
 
 import numpy as np
@@ -157,8 +158,7 @@ class MlpPolicyOld(object):
 
 class MlpPolicy(object):
     def __init__(self, sess, ob_space, ac_space, n_batch, n_steps,
-                 n_hidden, n_layers, activation, n_lp_layers=0, n_lp_hidden=0, lp_activation=None,
-                 reuse=False):  # pylint: disable=W0613
+                 n_hidden, n_layers, activation, reuse=False):  # pylint: disable=W0613
         self.pdtype = make_pdtype(ac_space)
         with tf.variable_scope("model", reuse=reuse):
             X, pi_h = get_inputs(ob_space, n_batch)
@@ -166,10 +166,7 @@ class MlpPolicy(object):
             for i in range(n_layers):
                 pi_h = activation(fc(pi_h, f'pi_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
                 vf_h = activation(fc(vf_h, f'vf_fc{i + 1}', nh=n_hidden, init_scale=np.sqrt(2)))
-            for i in range(n_lp_layers):
-                lp_h = lp_activation(fc(lp_h, f'lp_fc{i + 1}', nh=n_lp_hidden, init_scale=np.sqrt(2)))
             vf = fc(vf_h, 'vf', 1)[:, 0]
-            lp = fc(lp_h, 'lp', 1)[:, 0]
 
             self.pd, self.pi = self.pdtype.pdfromlatent(pi_h, init_scale=0.01)
 
@@ -186,73 +183,81 @@ class MlpPolicy(object):
 
         self.X = X
         self.vf = vf
-        self.lp = lp
         self.step = step
         self.value = value
 
 
+@contextmanager
+def check_shape(tensor, shape):
+    tf_shape = tf.shape(tensor)
+    with tf.control_dependencies([tf.Assert(tf_shape == shape, [tf_shape])]):
+        yield
+
+
 class MlpPolicyWithMemory:
     # noinspection PyPep8Naming
-    def __init__(self, sess, ob_space, ac_space, n_env, n_steps, n_hidden, n_layers,
-                 activation, n_memory, size_memory, reuse=False):
-        def dense(x, scope: str, reuse: bool = False):
-            return activation(fc(x, scope=scope, nh=n_hidden,
+    def __init__(self, sess, ob_space, ac_space, n_batch, n_steps,
+                 size_layer, n_layers, activation, n_memory, size_memory,
+                 reuse=False):  # pylint: disable=W0613
+        def dense(x, scope: str, nh=size_layer, reuse: bool = False):
+            return activation(fc(x, scope=scope, nh=nh,
                                  init_scale=np.sqrt(2), reuse=reuse))
 
         self.pdtype = make_pdtype(ac_space)
-        n_batch = n_env * n_steps
         assert isinstance(ob_space, spaces.Dict)
         input_dict = get_inputs(ob_space, n_batch)
         G, goal_h = input_dict['goal']
-        ob_shape = [n_batch] + list(ob_space.shape)
-        with tf.control_dependencies(tf.Assert(tf.shape(goal_h) == ob_shape)):
+        ob_shape = [n_batch] + list(ob_space.spaces['obs'].shape)
+        goal_shape = [n_batch] + list(ob_space.spaces['goal'].shape)
+        with check_shape(goal_h, ob_shape):
             O, obs_h = input_dict['obs']
-        with tf.control_dependencies(tf.Assert(tf.shape(obs_h) == ob_shape)):
+        with check_shape(obs_h, ob_shape):
             A, action_h = get_inputs(ac_space, n_batch)
-        with tf.control_dependencies(tf.Assert(tf.shape(action_h) == [n_batch] + list(ac_space.shape))):
+        with check_shape(action_h, [n_batch] + list(ac_space.shape)):
             mem_shape = [n_batch, n_memory, size_memory]
-            self.initial_state = ortho_init()(mem_shape)
+            self.initial_state = tf.orthogonal_initializer()(mem_shape, tf.float32)
             M = tf.placeholder(tf.float32, mem_shape)
 
         def c(h):
-            with tf.control_dependencies(tf.Assert(tf.shape(h) == [n_batch, n_hidden])):
+            with check_shape(h, [n_batch, size_memory]):
                 key = tf.expand_dims(h, axis=1)
-            with tf.control_dependencies(tf.Assert(tf.shape(key) == [n_batch, 1, n_hidden])):
+            with check_shape(key, [n_batch, 1, size_memory]):
                 prod = key * M
-            with tf.control_dependencies(tf.Assert(tf.shape(prod) == mem_shape)):
+            with check_shape(prod, mem_shape):
                 sim = tf.reduce_sum(prod, axis=1, keepdims=True)
-            with tf.control_dependencies(tf.Assert(tf.shape(sim) == [n_batch, 1, n_hidden])):
+            with check_shape(sim, [n_batch, 1, size_memory]):
                 return tf.nn.softmax(sim, axis=1)
 
         with tf.variable_scope("network", reuse=reuse):
             for i in range(n_layers):
                 obs_h = dense(obs_h, f'obs_fc{i + 1}')
-                with tf.control_dependencies(tf.Assert(tf.shape(obs_h) == [n_batch, n_hidden])):
+                with check_shape(obs_h, [n_batch, size_layer]):
                     action_h = dense(action_h, f'action_fc{i + 1}')
-                with tf.control_dependencies(tf.Assert(tf.shape(action_h) == [n_batch, n_hidden])):
+                with check_shape(action_h, [n_batch, size_layer]):
                     goal_h = dense(goal_h, f'obs_fc{i + 1}', reuse=True)
-            with tf.control_dependencies(tf.Assert(tf.shape(goal_h) == [n_batch, n_hidden])):
-                h = tf.concat([goal_h, obs_h])
-            with tf.control_dependencies(tf.Assert(tf.shape(h) == [n_batch, n_hidden * 2])):
+            with check_shape(goal_h, [n_batch, size_layer]):
+                h = tf.concat([goal_h, obs_h], axis=1)
+            with check_shape(h, [n_batch, 2 * size_layer]):
                 vf = fc(h, 'vf', 1)[:, 0]
                 self.pd, self.pi = self.pdtype.pdfromlatent(h)
 
-            oa_h = dense(obs_h, 'obs_fc_final') + dense(action_h, 'action_fc_final')
-            with tf.control_dependencies(tf.Assert(tf.shape(oa_h) == [n_batch, n_hidden])):
-                oa_h -= tf.reduce_mean(oa_h, axis=1)
-            with tf.control_dependencies(tf.Assert(tf.shape(oa_h) == [n_batch, n_hidden])):
+            oa_h = dense(obs_h, 'obs_fc_final', nh=size_memory) + \
+                   dense(action_h, 'action_fc_final', nh=size_memory)
+            with check_shape(oa_h, [n_batch, size_memory]):
+                oa_h -= tf.reduce_mean(oa_h, axis=1, keepdims=True)
+            with check_shape(oa_h, [n_batch, size_memory]):
                 goal_h = dense(goal_h, 'goal_fc_final')
             c_oa = c(oa_h)
-            with tf.control_dependencies(tf.Assert(tf.shape(c_oa) == [n_batch, n_memory])):
+            with check_shape(c_oa, [n_batch, size_memory]):
                 c_g = c(goal_h)
-            with tf.control_dependencies(tf.Assert(tf.shape(c_oa) == [n_batch, n_memory])):
+            with check_shape(c_oa, [n_batch, size_memory]):
                 M_new = M + (tf.expand_dims(oa_h, axis=1) *
                              tf.expand_dims(c_oa, axis=2))
 
             c_oa = tf.distributions.Categorical(c_oa)
             c_g = tf.distributions.Categorical(c_g)
             divergence = tf.distributions.kl_divergence(c_oa, c_g)
-            with tf.control_dependencies(tf.Assert(tf.shape(divergence) == [n_batch, 1])):
+            with check_shape(divergence, [n_batch, 1]):
                 qf = 1 / divergence
                 qf /= 1 + qf
 

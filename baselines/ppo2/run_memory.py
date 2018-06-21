@@ -10,7 +10,7 @@ from baselines.common import set_global_seeds, gym
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
-from baselines.ppo2.networks import MlpPolicy
+from baselines.ppo2.networks import MlpPolicy, MlpPolicyWithMemory
 from environments.frozen_lake_goal import FrozenLakeGoalEnv
 
 
@@ -19,26 +19,26 @@ from environments.frozen_lake_goal import FrozenLakeGoalEnv
 @click.option('--max-steps', default=300, type=int)
 @click.option('--max-grad-norm', default=.5, type=float)
 @click.option('--n-mini-batch', default=1, type=int)
-@click.option('--n-layers', default=2, type=int)
+@click.option('--n-memory', default=16, type=int)
 @click.option('--n-env', default=1, type=int)
-@click.option('--n-hidden', default=128, type=int)
+@click.option('--size-memory', default=128, type=int)
 @click.option('--map-dim', default=8, type=int)
 @click.option('--n-steps', default=300, type=int)
-@click.option('--mlp', 'network', flag_value='mlp', default=True)
-@click.option('--lstm', 'network', flag_value='lstm')
+@click.option('--mlp', 'network', flag_value='mlp')
+@click.option('--mem', 'network', flag_value='mem', default=True)
 @click.option('--tanh', 'activation', flag_value=tf.nn.tanh)
 @click.option('--relu', 'activation', flag_value=tf.nn.relu, default=True)
 @click.option('--logdir', type=str)
 def cli(max_steps, seed, network, logdir, n_mini_batch, n_steps,
-        n_layers, n_hidden, activation, max_grad_norm, n_env, map_dim):
+        n_memory, size_memory, activation, max_grad_norm, n_env, map_dim):
     format_strs = ['stdout']
     if logdir:
         format_strs += ['tensorboard']
     logger.configure(format_strs=format_strs, dir=logdir)
 
-    # env = TimeLimit( max_episode_steps=max_steps,
-    #     env=FrozenLakeGoalEnv(map_dims=(map_dim, map_dim)))
-    env = gym.make('FrozenLake-v0')
+    env = TimeLimit(max_episode_steps=max_steps,
+                    env=FrozenLakeGoalEnv(map_dims=(map_dim, map_dim)))
+    # env = gym.make('FrozenLake-v0')
     ncpu = 1
     config = tf.ConfigProto(allow_soft_placement=True,
                             intra_op_parallelism_threads=ncpu,
@@ -54,14 +54,20 @@ def cli(max_steps, seed, network, logdir, n_mini_batch, n_steps,
     set_global_seeds(seed)
 
     def policy(*args, **kwargs):
-        return MlpPolicy(
-            n_hidden=128,
-            n_layers=2,
-            activation=tf.nn.relu,
-            n_lp_layers=n_layers,
-            n_lp_hidden=n_hidden,
-            lp_activation=activation,
-            *args, **kwargs)
+        if network == 'mlp':
+            return MlpPolicy(
+                n_hidden=128,
+                n_layers=2,
+                activation=activation,
+                *args, **kwargs)
+        else:
+            return MlpPolicyWithMemory(
+                size_layer=128,
+                n_layers=2,
+                activation=activation,
+                n_memory=n_memory,
+                size_memory=size_memory,
+                *args, **kwargs)
 
     model = ppo2.learn(policy=policy, env=env, n_steps=n_steps, n_mini_batches=n_mini_batch,
                        max_grad_norm=max_grad_norm,

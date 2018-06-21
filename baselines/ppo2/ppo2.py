@@ -140,7 +140,7 @@ class Runner(AbstractEnvRunner):
             mb_values.append(values)
             mb_neg_log_pacs.append(neg_log_pacs)
             mb_dones.append(self.dones)
-            self.obs[:], rewards, self.dones, infos = self.env.step(actions)
+            self.obs, rewards, self.dones, infos = self.env.step(actions)
             for info in infos:
                 maybe_ep_info = info.get('episode')
                 if maybe_ep_info: ep_infos.append(maybe_ep_info)

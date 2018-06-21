@@ -70,9 +70,6 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, see
                 n_hidden=128,
                 n_layers=2,
                 activation=tf.nn.relu,
-                n_lp_layers=n_layers,
-                n_lp_hidden=n_hidden,
-                lp_activation=activation,
                 n_batch=env.num_envs,
                 n_steps=n_steps,
                 *args, **kwargs)
@@ -80,7 +77,7 @@ def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, see
             assert n_env % n_mini_batch == 0
             assert n_steps * n_env == n_batch
             return MlpPolicyWithMemory(
-                n_hidden=128,
+                size_layer=128,
                 n_layers=2,
                 activation=tf.nn.relu,
                 n_cells=2,
