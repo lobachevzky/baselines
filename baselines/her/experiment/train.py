@@ -101,11 +101,12 @@ def launch(
     rank = MPI.COMM_WORLD.Get_rank()
 
     # Configure logging
+    format_strs = ['tensorboard']
     if rank == 0:
         if logdir or logger.get_dir() is None:
-            logger.configure(dir=logdir)
+            logger.configure(dir=logdir, format_strs=format_strs)
     else:
-        logger.configure()
+        logger.configure(format_strs=format_strs)
     logdir = logger.get_dir()
     assert logdir is not None
     os.makedirs(logdir, exist_ok=True)
