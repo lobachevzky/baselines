@@ -1,6 +1,8 @@
 import numpy as np
 import gym
 import numpy as np
+from gym.wrappers import TimeLimit
+from pathlib import Path
 
 from baselines import logger
 from baselines.her.ddpg import DDPG
@@ -12,7 +14,6 @@ DEFAULT_ENV_PARAMS = {
         'n_cycles': 10,
     },
 }
-
 
 DEFAULT_PARAMS = {
     # env
@@ -47,7 +48,6 @@ DEFAULT_PARAMS = {
     'norm_clip': 5,  # normalized observations are cropped to this values
 }
 
-
 CACHED_ENVS = {}
 
 
@@ -70,12 +70,24 @@ def prepare_params(kwargs):
     env_name = kwargs['env_name']
 
     def make_env():
-        if env_name is 'multi-task':
-            return MultiTaskEnv(steps_per_action=200,
-                                geofence=.06,
-                                min_lift_height=.03
-                                )
+        if env_name == 'MultiTask':
+            return TimeLimit(
+                max_episode_steps=200,
+                env=MultiTaskEnv(
+                    geofence=.06,
+                    xml_filepath=Path('models/world.xml'),
+                    steps_per_action=200,
+                    obs_type='robot_qvel',
+                    render_freq=0,
+                    record=None,
+                    record_path=None,
+                    record_freq=None,
+                    image_dimensions=None,
+                    fixed_block=True,
+                    fixed_goal=np.array([.08, .16, .401]),
+                ))
         return gym.make(env_name)
+
     kwargs['make_env'] = make_env
     tmp_env = cached_make_env(kwargs['make_env'])
     assert hasattr(tmp_env, '_max_episode_steps')

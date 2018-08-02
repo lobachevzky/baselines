@@ -3,10 +3,10 @@ import random
 import numpy as np
 from gym import spaces
 
+from baselines.her.util import vectorize
 from environments.mujoco import MujocoEnv
 from mujoco import ObjType
 
-from sac.utils import vectorize
 
 CHEAT_STARTS = [[
     7.450e-05,
@@ -71,8 +71,13 @@ class PickAndPlaceEnv(MujocoEnv):
         self.initial_block_pos = np.copy(self.block_pos())
         left_finger_name = 'hand_l_distal_link'
         self._finger_names = [left_finger_name, left_finger_name.replace('_l_', '_r_')]
-        inf_like_obs = np.inf * np.ones_like(vectorize(self._get_obs()), dtype=np.float32)
-        self.observation_space = spaces.Box(low=-inf_like_obs, high=inf_like_obs)
+        obs = self._get_obs()
+        self.observation_space = spaces.Dict(dict(
+            desired_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
+            achieved_goal=spaces.Box(-np.inf, np.inf, shape=obs['achieved_goal'].shape, dtype='float32'),
+            observation=spaces.Box(-np.inf, np.inf, shape=obs['observation'].shape, dtype='float32'),
+        ))
+
         self.action_space = spaces.Box(
             low=self.sim.actuator_ctrlrange[:-1, 0],
             high=self.sim.actuator_ctrlrange[:-1, 1],
@@ -185,10 +190,7 @@ class PickAndPlaceEnv(MujocoEnv):
         mirroring_index = np.minimum(mirroring_index, self.action_space.shape)
         action = np.insert(action, mirroring_index, action[mirrored_index])
 
-        s, r, t, i = super().step(action)
-        if not self._cheated:
-            i['log count'] = {'successes': float(r > 0)}
-        return s, r, t, i
+        return super().step(action)
 
 
 def mat2euler(mat):
