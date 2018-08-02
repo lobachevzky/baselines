@@ -1,14 +1,12 @@
 import random
-from collections import namedtuple
-from os.path import join
-from pathlib import Path
-from typing import List
 
 import numpy as np
 from gym import spaces
 
-from environments.mujoco import MujocoEnv, at_goal, print1
+from environments.mujoco import MujocoEnv
 from mujoco import ObjType
+
+from sac.utils import vectorize
 
 CHEAT_STARTS = [[
     7.450e-05,
@@ -42,127 +40,138 @@ def quaternion_multiply(quaternion1, quaternion0):
         dtype=np.float64)
 
 
-Goal = namedtuple('Goal', 'gripper block')
-
-
 class PickAndPlaceEnv(MujocoEnv):
     def __init__(self,
-                 fixed_block,
-                 steps_per_action,
+                 block_xrange=None,
+                 block_yrange=None,
+                 fixed_block=False,
                  min_lift_height=.02,
-                 geofence=.04,
-                 neg_reward=False,
-                 discrete=False,
                  cheat_prob=0,
-                 xml_filepath=None,
-                 xml_file='world.xml',
-                 render_freq=0):
-        if discrete:
-            xml_file = 'discrete.xml'
-        if xml_filepath is None:
-            xml_filepath = Path(Path(__file__).parent,
-                                'models', 'pick-and-place', xml_file)
+                 obs_type=None,
+                 **kwargs):
+        if block_xrange is None:
+            block_xrange = (0, 0)
+        if block_yrange is None:
+            block_yrange = (0, 0)
+        self.block_xrange = block_xrange
+        self.block_yrange = block_yrange
+        self.grip = 0
+        self.min_lift_height = min_lift_height
+
+        self._obs_type = obs_type
         self._cheated = False
         self._cheat_prob = cheat_prob
-        self.grip = 0
         self._fixed_block = fixed_block
-        self._goal_block_name = 'block1'
-        self._min_lift_height = min_lift_height + geofence
-        self.geofence = geofence
-        self._discrete = discrete
+        self._block_name = 'block1'
 
-        super().__init__(
-            xml_filepath=xml_filepath,
-            neg_reward=neg_reward,
-            steps_per_action=steps_per_action,
-            image_dimensions=None,
-            render_freq=render_freq)
+        super().__init__(**kwargs)
 
+        self.reward_range = 0, 1
         self.initial_qpos = np.copy(self.init_qpos)
-        self._initial_block_pos = np.copy(self.block_pos())
+        self.initial_block_pos = np.copy(self.block_pos())
         left_finger_name = 'hand_l_distal_link'
         self._finger_names = [left_finger_name, left_finger_name.replace('_l_', '_r_')]
-        obs_size = np.size(self.prepare_for_network(self._get_obs()))
-        assert obs_size != 0
-        self.observation_space = spaces.Box(
-            -np.inf, np.inf, shape=(obs_size,), dtype=np.float32)
-        if discrete:
-            self.action_space = spaces.Discrete(7)
-        else:
-            self.action_space = spaces.Box(
-                low=np.array([-15, -20, -20]),
-                high=np.array([35, 20, 20]),
-                dtype=np.float32)
+        inf_like_obs = np.inf * np.ones_like(vectorize(self._get_obs()), dtype=np.float32)
+        self.observation_space = spaces.Box(low=-inf_like_obs, high=inf_like_obs)
+        self.action_space = spaces.Box(
+            low=self.sim.actuator_ctrlrange[:-1, 0],
+            high=self.sim.actuator_ctrlrange[:-1, 1],
+            dtype=np.float32)
         self._table_height = self.sim.get_body_xpos('pan')[2]
         self._rotation_actuators = ["arm_flex_motor"]  # , "wrist_roll_motor"]
         self.unwrapped = self
 
-    def reset_qpos(self):
-        if not self._fixed_block:
-            block_joint = self.sim.jnt_qposadr('block1joint')
-
-            self.init_qpos[block_joint + 3] = np.random.uniform(0, 1)
-            self.init_qpos[block_joint + 6] = np.random.uniform(-1, 1)
+    def _reset_qpos(self):
         if np.random.uniform(0, 1) < self._cheat_prob:
             self._cheated = True
             self.init_qpos = np.array(random.choice(CHEAT_STARTS))
         else:
             self._cheated = False
             self.init_qpos = self.initial_qpos
+        if not self._fixed_block:
+            block_joint = self.sim.get_jnt_qposadr('block1joint')
+            self.init_qpos[block_joint + 0] = np.random.uniform(*self.block_xrange)
+            self.init_qpos[block_joint + 1] = np.random.uniform(*self.block_yrange)
+            self.init_qpos[block_joint + 3] = np.random.uniform(0, 1)
+            self.init_qpos[block_joint + 6] = np.random.uniform(-1, 1)
 
         return self.init_qpos
 
-    def _set_new_goal(self):
-        pass
+    def _get_obs_space(self, obs):
+        inf_like_obs = np.inf * np.ones_like(obs, dtype=np.float32)
+        return spaces.Box(*map(np.array, [-inf_like_obs, inf_like_obs]))
+
+    def _qvel_obs(self, obs_type=None):
+        obs_type = obs_type or self._obs_type
+
+        def get_qvels(joints):
+            base_qvel = []
+            for joint in joints:
+                try:
+                    base_qvel.append(self.sim.get_joint_qvel(joint))
+                except RuntimeError:
+                    pass
+            return np.array(base_qvel)
+
+        if obs_type == 'qvel':
+            return self.sim.qvel
+
+        elif obs_type == 'robot-qvel':
+            return get_qvels([
+                'slide_x', 'slide_y', 'arm_lift_joint', 'arm_flex_joint',
+                'wrist_roll_joint', 'hand_l_proximal_joint', 'hand_r_proximal_joint'
+            ])
+        elif obs_type == 'base-qvel':
+            return get_qvels(['slide_x', 'slide_x'])
+        else:
+            return []
 
     def _get_obs(self):
-        return np.copy(self.sim.qpos)
+        # positions
+        grip_pos = self.gripper_pos()
+        dt = self.sim.nsubsteps * self.sim.timestep
+        object_pos = self.block_pos()
+        grip_velp = .5 * sum(self.sim.get_body_xvelp(name)
+                             for name in self._finger_names)
+        # rotations
+        object_rot = mat2euler(self.sim.get_body_xmat(self._block_name))
+        # velocities
+        object_velp = self.sim.get_body_xvelp(self._block_name) * dt
+        object_velr = self.sim.get_body_xvelr(self._block_name) * dt
+        # gripper state
+        object_rel_pos = object_pos - grip_pos
+        object_velp -= grip_velp
+        gripper_state = np.array(
+            [self.sim.get_joint_qpos(f'hand_{x}_proximal_joint') for x in 'lr'])
+        qvels = np.array(
+            [self.sim.get_joint_qvel(f'hand_{x}_proximal_joint') for x in 'lr'])
+        gripper_vel = dt * .5 * qvels
+
+        return np.concatenate([
+            grip_pos, object_pos.ravel(), object_rel_pos.ravel(), gripper_state, object_rot.ravel(),
+            object_velp.ravel(), object_velr.ravel(), grip_velp, gripper_vel,
+        ])
 
     def block_pos(self):
-        return self.sim.get_body_xpos(self._goal_block_name)
+        return self.sim.get_body_xpos(self._block_name)
 
     def gripper_pos(self):
         finger1, finger2 = [self.sim.get_body_xpos(name) for name in self._finger_names]
         return (finger1 + finger2) / 2.
 
-    def goal(self):
-        goal_pos = self._initial_block_pos + \
-                   np.array([0, 0, self._min_lift_height])
-        return Goal(gripper=goal_pos, block=goal_pos)
+    def _is_successful(self):
+        return self.block_pos()[2] > self.initial_block_pos[2] + self.min_lift_height
 
-    def goal_3d(self):
-        return self.goal()[0]
+    def compute_terminal(self):
+        return self._is_successful()
 
-    def at_goal(self, goal):
-        gripper_at_goal = at_goal(self.gripper_pos(), goal.gripper, self.geofence)
-        block_at_goal = at_goal(self.block_pos(), goal.block, self.geofence)
-        return gripper_at_goal and block_at_goal
-
-    def compute_terminal(self, goal, obs):
-        # return False
-        return self.at_goal(goal)
-
-    def compute_reward(self, goal, obs):
-        if self.at_goal(goal):
+    def compute_reward(self):
+        if self._is_successful():
             return 1
-        elif self._neg_reward:
-            return -.0001
         else:
             return 0
 
     def step(self, action):
-        if self._discrete:
-            a = np.zeros(4)
-            if action > 0:
-                action -= 1
-                joint = action // 2
-                assert 0 <= joint <= 2
-                direction = (-1) ** (action % 2)
-                joint_scale = [.2, .05, .5]
-                a[2] = self.grip
-                a[joint] = direction * joint_scale[joint]
-                self.grip = a[2]
-            action = a
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
         mirrored = 'hand_l_proximal_motor'
@@ -171,17 +180,32 @@ class PickAndPlaceEnv(MujocoEnv):
         # insert mirrored values at the appropriate indexes
         mirrored_index, mirroring_index = [
             self.sim.name2id(ObjType.ACTUATOR, n) for n in [mirrored, mirroring]
-            ]
+        ]
         # necessary because np.insert can't append multiple values to end:
-        if self._discrete:
-            action[mirroring_index] = action[mirrored_index]
-        else:
-            mirroring_index = np.minimum(mirroring_index, self.action_space.shape)
-            action = np.insert(action, mirroring_index, action[mirrored_index])
+        mirroring_index = np.minimum(mirroring_index, self.action_space.shape)
+        action = np.insert(action, mirroring_index, action[mirrored_index])
+
         s, r, t, i = super().step(action)
         if not self._cheated:
             i['log count'] = {'successes': float(r > 0)}
         return s, r, t, i
 
-    def prepare_for_network(self, observation: np.ndarray):
-        return np.concatenate([observation, self.goal().gripper, self.goal().block])
+
+def mat2euler(mat):
+    """ Convert Rotation Matrix to Euler Angles.  See rotation.py for notes """
+    mat = np.asarray(mat, dtype=np.float64)
+    assert mat.shape[-2:] == (3, 3), "Invalid shape matrix {}".format(mat)
+
+    cy = np.sqrt(mat[..., 2, 2] * mat[..., 2, 2] + mat[..., 1, 2] * mat[..., 1, 2])
+    condition = cy > np.finfo(np.float64).eps * 4.
+    euler = np.empty(mat.shape[:-1], dtype=np.float64)
+    euler[..., 2] = np.where(condition,
+                             -np.arctan2(mat[..., 0, 1], mat[..., 0, 0]),
+                             -np.arctan2(-mat[..., 1, 0], mat[..., 1, 1]))
+    euler[..., 1] = np.where(condition,
+                             -np.arctan2(-mat[..., 0, 2], cy),
+                             -np.arctan2(-mat[..., 0, 2], cy))
+    euler[..., 0] = np.where(condition,
+                             -np.arctan2(mat[..., 1, 2], mat[..., 2, 2]),
+                             0.0)
+    return euler

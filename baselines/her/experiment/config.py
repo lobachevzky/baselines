@@ -5,8 +5,7 @@ import numpy as np
 from baselines import logger
 from baselines.her.ddpg import DDPG
 from baselines.her.her import make_sample_her_transitions
-from environment.pick_and_place import PickAndPlaceEnv
-
+from environments.multi_task import MultiTaskEnv
 
 DEFAULT_ENV_PARAMS = {
     'FetchReach-v1': {
@@ -71,6 +70,11 @@ def prepare_params(kwargs):
     env_name = kwargs['env_name']
 
     def make_env():
+        if env_name is 'multi-task':
+            return MultiTaskEnv(steps_per_action=200,
+                                geofence=.06,
+                                min_lift_height=.03
+                                )
         return gym.make(env_name)
     kwargs['make_env'] = make_env
     tmp_env = cached_make_env(kwargs['make_env'])

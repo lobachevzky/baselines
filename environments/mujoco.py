@@ -1,27 +1,24 @@
-import os
 from abc import abstractmethod
 from pathlib import Path
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 import numpy as np
+from gym.wrappers.monitoring.video_recorder import VideoRecorder
 
 import mujoco
 
 
 class MujocoEnv:
-    def __init__(self, xml_filepath: Path,
-                 image_dimensions: Optional[Tuple[int]],
-                 neg_reward: bool,
+    def __init__(self,
+                 xml_filepath: Path,
                  steps_per_action: int,
-                 render_freq: int):
+                 image_dimensions: Optional[Tuple[int]] = None,
+                 record_path: Optional[Path] = None,
+                 record_freq: int = 0,
+                 record: bool = None,
+                 render_freq: int = 0):
         if not xml_filepath.is_absolute():
             xml_filepath = Path(Path(__file__).parent, xml_filepath)
-        self.sim = mujoco.Sim(str(xml_filepath), n_substeps=1)
-        self.init_qpos = self.sim.qpos.ravel().copy()
-        self.init_qvel = self.sim.qvel.ravel().copy()
-        self._step_num = 0
-        self._neg_reward = neg_reward
-        self._image_dimensions = image_dimensions
 
         self.observation_space = self.action_space = None
 
@@ -32,6 +29,35 @@ class MujocoEnv:
         self.render_freq = render_freq
         self.steps_per_action = steps_per_action
 
+        self.video_recorder = None
+        self._record_video = any((record_path, record_freq, record))
+        if self._record_video:
+            if not record_path:
+                record_path = Path('/tmp/training-video')
+            if not image_dimensions:
+                image_dimensions = (400, 400)
+            if not record_freq:
+                record_freq = 20
+
+            print(f'Recording video to {record_path}.mp4')
+            record_path.mkdir(exist_ok=True)
+            self._record_freq = record_freq
+            self._image_dimensions = image_dimensions
+
+            self.video_recorder = VideoRecorder(
+                env=self,
+                base_path=str(record_path),
+                enabled=True,
+            )
+        else:
+            image_dimensions = image_dimensions or []
+
+        self.sim = mujoco.Sim(str(xml_filepath), *image_dimensions, n_substeps=1)
+
+        self.init_qpos = self.sim.qpos.ravel().copy()
+        self.init_qvel = self.sim.qvel.ravel().copy()
+        self._image_dimensions = image_dimensions
+
     def seed(self, seed=None):
         np.random.seed(seed)
 
@@ -40,20 +66,18 @@ class MujocoEnv:
 
     def render(self, mode=None, camera_name=None, labels=None):
         if mode == 'rgb_array':
-            return self.sim.render_offscreen(height=256, width=256)
-        if labels is None:
-            labels = dict(x=self.goal_3d())
-        self.sim.render(camera_name, labels)
+            return self.sim.render_offscreen(camera_name=camera_name)
+        return self.sim.render(camera_name=camera_name, labels=labels)
 
     def image(self, camera_name='rgb'):
-        return self.sim.render_offscreen(*self._image_dimensions, camera_name)
+        return self.sim.render_offscreen(camera_name)
 
     def step(self, action):
         assert np.shape(action) == np.shape(self.sim.ctrl)
         self._set_action(action)
-        done = self.compute_terminal(self.goal(), self._get_obs())
-        reward = self.compute_reward(self.goal(), self._get_obs())
-        return self.prepare_for_network(self._get_obs()), reward, done, {}
+        done = self.compute_terminal()
+        reward = self.compute_reward()
+        return self._get_obs(), reward, done, {}
 
     def _set_action(self, action):
         assert np.shape(action) == np.shape(self.sim.ctrl)
@@ -62,23 +86,20 @@ class MujocoEnv:
             self.sim.step()
             if self.render_freq > 0 and i % self.render_freq == 0:
                 self.render()
+            if self._record_video and i % self._record_freq == 0:
+                self.video_recorder.capture_frame()
 
     def reset(self):
         self.sim.reset()
-        self._step_num = 0
-
-        self._set_new_goal()
-        qpos = self.reset_qpos()
-        qvel = self.init_qvel + \
-            np.random.uniform(size=self.sim.nv, low=-0.01, high=0.01)
-        assert qpos.shape == (self.sim.nq, ) and qvel.shape == (self.sim.nv, )
+        qpos = self._reset_qpos()
+        assert qpos.shape == (self.sim.nq, )
         self.sim.qpos[:] = qpos.copy()
-        self.sim.qvel[:] = qvel.copy()
+        self.sim.qvel[:] = 0
         self.sim.forward()
-        return self.prepare_for_network(self._get_obs())
+        return self._get_obs()
 
     @abstractmethod
-    def reset_qpos(self):
+    def _reset_qpos(self):
         raise NotImplemented
 
     def __enter__(self):
@@ -88,31 +109,15 @@ class MujocoEnv:
         self.sim.__exit__()
 
     @abstractmethod
-    def _set_new_goal(self):
-        raise NotImplementedError
-
-    @abstractmethod
     def _get_obs(self):
         raise NotImplementedError
 
     @abstractmethod
-    def goal(self):
+    def compute_terminal(self):
         raise NotImplementedError
 
     @abstractmethod
-    def goal_3d(self):
-        raise NotImplementedError
-
-    @abstractmethod
-    def compute_terminal(self, goal, obs):
-        raise NotImplementedError
-
-    @abstractmethod
-    def compute_reward(self, goal, obs):
-        raise NotImplementedError
-
-    @abstractmethod
-    def prepare_for_network(self, obs):
+    def compute_reward(self):
         raise NotImplementedError
 
 
@@ -149,7 +154,7 @@ def at_goal(pos, goal, geofence, verbose=False):
 def escaped(pos, world_upper_bound, world_lower_bound):
     # noinspection PyTypeChecker
     return np.any(pos > world_upper_bound) \
-        or np.any(pos < world_lower_bound)
+           or np.any(pos < world_lower_bound)
 
 
 def get_limits(pos, size):
