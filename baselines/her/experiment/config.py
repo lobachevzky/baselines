@@ -1,19 +1,17 @@
 import numpy as np
 import gym
-import numpy as np
-from gym.wrappers import TimeLimit
-from pathlib import Path
 
 from baselines import logger
 from baselines.her.ddpg import DDPG
 from baselines.her.her import make_sample_her_transitions
-from environments.multi_task import MultiTaskEnv
+
 
 DEFAULT_ENV_PARAMS = {
     'FetchReach-v1': {
         'n_cycles': 10,
     },
 }
+
 
 DEFAULT_PARAMS = {
     # env
@@ -55,6 +53,7 @@ DEFAULT_PARAMS = {
     'aux_loss_weight':  0.0078, #Weight corresponding to the auxilliary loss also called the cloning loss
 }
 
+
 CACHED_ENVS = {}
 
 
@@ -77,24 +76,7 @@ def prepare_params(kwargs):
     env_name = kwargs['env_name']
 
     def make_env():
-        if env_name == 'MultiTask':
-            return TimeLimit(
-                max_episode_steps=200,
-                env=MultiTaskEnv(
-                    geofence=.06,
-                    xml_filepath=Path('models/world.xml'),
-                    steps_per_action=200,
-                    obs_type='robot_qvel',
-                    render_freq=0,
-                    record=None,
-                    record_path=None,
-                    record_freq=None,
-                    image_dimensions=None,
-                    fixed_block=True,
-                    fixed_goal=np.array([.08, .16, .401]),
-                ))
         return gym.make(env_name)
-
     kwargs['make_env'] = make_env
     tmp_env = cached_make_env(kwargs['make_env'])
     assert hasattr(tmp_env, '_max_episode_steps')

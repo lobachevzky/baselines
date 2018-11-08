@@ -1,10 +1,9 @@
 import os
-import os.path as osp
 import time
 import functools
 import numpy as np
+import os.path as osp
 import tensorflow as tf
-
 from baselines import logger
 from collections import deque
 from baselines.common import explained_variance, set_global_seeds
@@ -20,7 +19,6 @@ except ImportError:
     MPI = None
 
 from baselines.common.tf_util import initialize
-
 
 class Model(object):
     """
@@ -123,29 +121,16 @@ class Model(object):
 
             # Normalize the advantages
             advs = (advs - advs.mean()) / (advs.std() + 1e-8)
-            feed_dict = {A: actions,
-                         ADV: advs,
-                         R: returns,
-                         LR: lr,
-                         CLIP_RANGE: clip_range,
-                         OLD_NEG_LOG_PAC: neg_log_pacs,
-                         OLD_V_PRED: values}
-            if isinstance(train_model.X, dict):
-                for k in train_model.X:
-                    feed_dict[train_model.X[k]] = obs[k]
-            else:
-                feed_dict[train_model.X] = obs
+            td_map = {train_model.X:obs, A:actions, ADV:advs, R:returns, LR:lr,
+                    CLIPRANGE:cliprange, OLDNEGLOGPAC:neglogpacs, OLDVPRED:values}
             if states is not None:
-                feed_dict[train_model.S] = states
-                feed_dict[train_model.M] = masks
-            fetch = [pg_loss, vf_loss, entropy, approx_kl, clip_frac, _train]
-            if remember_states:
-                fetch = [memory_loss] + fetch
-            return sess.run(fetch, feed_dict)[:-1]
-
+                td_map[train_model.S] = states
+                td_map[train_model.M] = masks
+            return sess.run(
+                [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train],
+                td_map
+            )[:-1]
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
-        if remember_states:
-            self.loss_names += ['prediction_loss']
 
 
         self.train = train
@@ -194,43 +179,41 @@ class Runner(AbstractEnvRunner):
             mb_obs.append(self.obs.copy())
             mb_actions.append(actions)
             mb_values.append(values)
-            mb_neg_log_pacs.append(neg_log_pacs)
+            mb_neglogpacs.append(neglogpacs)
             mb_dones.append(self.dones)
 
             # Take actions in env and look the results
             # Infos contains a ton of useful informations
             self.obs[:], rewards, self.dones, infos = self.env.step(actions)
             for info in infos:
-                maybe_ep_info = info.get('episode')
-                if maybe_ep_info: ep_infos.append(maybe_ep_info)
+                maybeepinfo = info.get('episode')
+                if maybeepinfo: epinfos.append(maybeepinfo)
             mb_rewards.append(rewards)
-        # batch of steps to batch of rollouts
+        #batch of steps to batch of rollouts
         mb_obs = np.asarray(mb_obs, dtype=self.obs.dtype)
         mb_rewards = np.asarray(mb_rewards, dtype=np.float32)
         mb_actions = np.asarray(mb_actions)
         mb_values = np.asarray(mb_values, dtype=np.float32)
-        mb_neg_log_pacs = np.asarray(mb_neg_log_pacs, dtype=np.float32)
+        mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
         mb_dones = np.asarray(mb_dones, dtype=np.bool)
         last_values = self.model.value(self.obs, S=self.states, M=self.dones)
 
         # discount/bootstrap off value fn
         mb_returns = np.zeros_like(mb_rewards)
         mb_advs = np.zeros_like(mb_rewards)
-        last_gae_lam = 0
+        lastgaelam = 0
         for t in reversed(range(self.nsteps)):
             if t == self.nsteps - 1:
-                next_nonterminal = 1.0 - self.dones
-                next_values = last_values
+                nextnonterminal = 1.0 - self.dones
+                nextvalues = last_values
             else:
-                next_nonterminal = 1.0 - mb_dones[t + 1]
-                next_values = mb_values[t + 1]
-            delta = mb_rewards[t] + self.gamma * next_values * next_nonterminal - mb_values[t]
-            mb_advs[t] = last_gae_lam = delta + self.gamma * self.lam * next_nonterminal * last_gae_lam
+                nextnonterminal = 1.0 - mb_dones[t+1]
+                nextvalues = mb_values[t+1]
+            delta = mb_rewards[t] + self.gamma * nextvalues * nextnonterminal - mb_values[t]
+            mb_advs[t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
         mb_returns = mb_advs + mb_values
-        return (*map(sf01, (mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neg_log_pacs)),
-                mb_states, ep_infos)
-
-
+        return (*map(sf01, (mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs)),
+            mb_states, epinfos)
 # obs, returns, masks, actions, values, neglogpacs, states = runner.run()
 def sf01(arr):
     """
@@ -239,11 +222,9 @@ def sf01(arr):
     s = arr.shape
     return arr.swapaxes(0, 1).reshape(s[0] * s[1], *s[2:])
 
-
-def const_fn(val):
+def constfn(val):
     def f(_):
         return val
-
     return f
 
 def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, lr=3e-4,
@@ -407,9 +388,9 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
             # Calculates if value function is a good predicator of the returns (ev > 1)
             # or if it's just worse than predicting nothing (ev =< 0)
             ev = explained_variance(values, returns)
-            logger.logkv("serial_timesteps", update * n_steps)
+            logger.logkv("serial_timesteps", update*nsteps)
             logger.logkv("nupdates", update)
-            logger.logkv("total_timesteps", update * n_batch)
+            logger.logkv("total_timesteps", update*nbatch)
             logger.logkv("fps", fps)
             logger.logkv("explained_variance", float(ev))
             logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
@@ -425,7 +406,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         if save_interval and (update % save_interval == 0 or update == 1) and logger.get_dir() and (MPI is None or MPI.COMM_WORLD.Get_rank() == 0):
             checkdir = osp.join(logger.get_dir(), 'checkpoints')
             os.makedirs(checkdir, exist_ok=True)
-            savepath = osp.join(checkdir, '%.5i' % update)
+            savepath = osp.join(checkdir, '%.5i'%update)
             print('Saving to', savepath)
             model.save(savepath)
     return model

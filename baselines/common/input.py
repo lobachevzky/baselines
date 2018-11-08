@@ -31,7 +31,7 @@ def observation_placeholder(ob_space, batch_size=None, name='Ob'):
     return tf.placeholder(shape=(batch_size,) + ob_space.shape, dtype=dtype, name=name)
 
 
-def get_inputs(space, batch_size=None, name='Ob'):
+def observation_input(ob_space, batch_size=None, name='Ob'):
     '''
     Create placeholder to feed observations into of the size appropriate to the observation space, and add input
     encoder of the appropriate type.
