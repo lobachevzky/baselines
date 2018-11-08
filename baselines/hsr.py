@@ -20,7 +20,6 @@ import tensorflow as tf
 from baselines import logger
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.ppo2.ppo2 import learn
-from environments.hindsight_wrapper import HSRHindsightWrapper, MBHSRHindsightWrapper
 from environments.hsr import HSREnv, MultiBlockHSREnv
 
 
@@ -228,44 +227,39 @@ def main(max_steps, min_lift_height, geofence, seed, learning_rate,
     learn(
         network='mlp',
         env=(DummyVecEnv([lambda: env])),
+        total_timesteps=1e20,
         lr=learning_rate,
         seed=seed,
         value_network='copy'
     )
 
-
 def cli():
     p = argparse.ArgumentParser()
-    p.add_argument('seed', type=int, required=True)
-    p.add_argument('steps_per_action', type=int, required=True)
-    p.add_argument('learning_rate', type=float, required=True)
-    p.add_argument('max_steps', type=int, required=True)
-    p.add_argument('n_blocks', type=int, required=True)
-    p.add_argument('min_lift_height', type=float, default=None)
-    p.add_argument('goal_space', type=parse_space(dim=3), default=None)  # TODO
-    p.add_argument('block_space', type=parse_space(dim=4), required=True)
-    p.add_argument('obs_type', type=str, default=None)
-    p.add_argument('geofence', type=float, required=True)
-    p.add_argument('no_random_reset', action='store_true')
-    p.add_argument('randomize_pose', action='store_true')
-    p.add_argument('logdir', type=str, default=None)
-    p.add_argument('load_path', type=str, default=None)
-    p.add_argument('save_path', type=str, default=None)
-    p.add_argument('save_threshold', type=int, default=None)
+    p.add_argument('--seed', type=int, required=True)
+    p.add_argument('--steps-per-action', type=int, required=True)
+    p.add_argument('--learning-rate', type=float, required=True)
+    p.add_argument('--max-steps', type=int, required=True)
+    p.add_argument('--n-blocks', type=int, required=True)
+    p.add_argument('--min-lift-height', type=float, default=None)
+    p.add_argument('--goal-space', type=parse_space(dim=3), default=None)  # TODO
+    p.add_argument('--block-space', type=parse_space(dim=4), required=True)
+    p.add_argument('--obs-type', type=str, default=None)
+    p.add_argument('--geofence', type=float, required=True)
+    p.add_argument('--no-random-reset', action='store_true')
+    p.add_argument('--randomize-pose', action='store_true')
+    p.add_argument('--logdir', type=str, default=None)
+    p.add_argument('--render', action='store_true')
+    p.add_argument('--render-freq', type=int, default=None)
+    p.add_argument('--record', action='store_true')
+    p.add_argument('--record-separate_episodes', action='store_true')
+    p.add_argument('--record-freq', type=int, default=None)
+    p.add_argument('--record-path', type=Path, default=None)
     p.add_argument(
-        '__image_dim, type=parse_vector(length=2, delim=','), default='800,800')
-    p.add_argument('render', action='store_true')
-    p.add_argument('render_freq', type=int, default=None)
-    p.add_argument('record', action='store_true')
-    p.add_argument('record_separate_episodes', action='store_true')
-    p.add_argument('record_freq', type=int, default=None)
-    p.add_argument('record_path', type=Path, default=None)
-    p.add_argument('xml_file', type=Path, default='world.xml')
-    p.add_argument('set_xml', type=put_in_xml_setter, action='append', nargs='*')
-    p.add_argument('use_dof', type=str, action='append')
-    p.add_argument('multi_block', action='store_true')
-    p.add_argument('unsupervised', action='store_true')
-    p.add_argument('debug', action='store_true')
+        '--image-dims', type=parse_vector(length=2, delim=','), default='800,800')
+    p.add_argument('--xml-file', type=Path, default='world.xml')
+    p.add_argument('--set-xml', type=put_in_xml_setter, action='append', nargs='*')
+    p.add_argument('--use-dof', type=str, action='append')
+    p.add_argument('--multi-block', action='store_true')
     main(**vars(p.parse_args()))
 
 
