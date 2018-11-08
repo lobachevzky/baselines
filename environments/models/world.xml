@@ -1,4 +1,4 @@
-<mujoco model="pick_and_place">
+<mujoco model="world">
     <option impratio="2.5" timestep="0.002"/>
     <default>
         <default class="wall">
@@ -38,6 +38,7 @@
     <option cone="elliptic"/>
     <visual>
         <map znear=".03"/>
+        <global offwidth="1000" offheight="1000"/>
     </visual>
     <compiler coordinate="local" angle="degree" meshdir="../hsr_meshes/meshes/" inertiafromgeom="true"/>
     <size njmax="500" nconmax="100"/>
@@ -75,18 +76,22 @@
         <light diffuse=".5 .5 .5" pos="0 0 3" dir="0 0 -1"/>
         <geom name="floor" type="plane" size="2 2 2" pos="0 0 0" class="floor"/>
 
-        <body name="pan" pos="0 0 .4">
-            <geom type="box" size=".17 .2667 .005" class="box"/>
-            <geom type="box" size=".001  .2667 .01" pos=".17 0  .01"  class="clear"/>
-            <geom type="box" size=".001  .2667 .01" pos="-.17 0 .01" class="clear"/>
-            <geom type="box" size=".17 .001  .01" pos="0 .2667  .01"  class="clear"/>
-            <geom type="box" size=".17 .001  .01" pos="0 -.2667 .01" class="clear"/>
+        <body name="goal" pos="0 0 0" mocap="true">
+            <site name="goal" size=".01 .01 .01" pos="0 0 0" rgba="0 1 0 .2"/>
         </body>
 
-        <body name="block1" pos="0 0 .43">
-          <geom type="box" mass="1" size=".0635 .0317 .0234" rgba=".8 .1 .1 1" condim="6" solimp="0.99 0.99 0.01" solref="0.01 1"/>
-          <freejoint name='block1joint'/>
+        <body name="pan" pos="0 0 .4">
+            <geom type="box" size=".17 .2667 .005" class="box"/>
+            <!--<geom type="box" size=".001  .2667 .01" pos=".17 0  .01"  class="clear"/>-->
+            <!--<geom type="box" size=".001  .2667 .01" pos="-.17 0 .01" class="clear"/>-->
+            <!--<geom type="box" size=".17 .001  .01" pos="0 .2667  .01"  class="clear"/>-->
+            <!--<geom type="box" size=".17 .001  .01" pos="0 -.2667 .01" class="clear"/>-->
         </body>
+
+        <!--<body name="block1" pos="0 0 .418">-->
+          <!--<geom name="block1" type="box" mass="1" size=".05 .025 .017" rgba=".8 .1 .1 1" condim="6" solimp="0.99 0.99 0.01" solref="0.01 1"/>-->
+          <!--<freejoint name='block1joint'/>-->
+        <!--</body>-->
 
         <!--<body name="block2" pos="0 0 .44">-->
           <!--<geom type="box" size=".0317 .0317 .0234" rgba=".1 .8 .1 1" condim="4" solimp="0.99 0.99 0.01" solref="0.01 1"/>-->
@@ -103,11 +108,11 @@
                   forcelimited="true" forcerange="-100 100"
                   ctrllimited="true" ctrlrange="-1 1"/>
         <position gear="5" kp="10" name="arm_lift_motor" joint="arm_lift_joint"
+                  forcelimited="true" forcerange="-20 20"
                   ctrllimited="true" ctrlrange="2.3 4.1"/>
-                  <!--forcelimited="true" forcerange="-20 20"-->
         <position gear="1" kp="1000" name="arm_flex_motor" joint="arm_flex_joint"
                   forcelimited="true" forcerange="-15 35"
-                  ctrllimited="true" ctrlrange="-1.09956 -.5"/>
+                  ctrllimited="true" ctrlrange="-1.2 -.5"/>
         <position gear="1" kp="1000" name="wrist_roll_motor" joint="wrist_roll_joint"
                   forcelimited="true" forcerange="-20 20"
                   ctrllimited="true" ctrlrange="-1.57 1.57"/>

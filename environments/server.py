@@ -1,9 +1,10 @@
+# stdlib
 import pickle
+from queue import Full, Queue
 import socket
 import sys
-import time
-from queue import Full, Queue
 from threading import Thread
+import time
 
 
 def _serve_forever(port, queue):

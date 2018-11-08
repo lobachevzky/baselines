@@ -1,11 +1,17 @@
+# stdlib
+import sys
 import time
 from typing import Iterable, Tuple, Union
 
+# third party
+from gym import utils
 import gym.envs.toy_text.frozen_lake
+from gym.spaces import Discrete
 import numpy as np
-from gym.spaces import Box
+from six import StringIO
 
-from environments.multi_task import Observation
+# first party
+from environments.hsr import Observation
 
 MAPS = gym.envs.toy_text.frozen_lake.MAPS
 MAPS["2x2"] = ["FF"] * 2
@@ -16,40 +22,23 @@ MAPS["3x3"] = [
 ]
 
 MAPS["3x4"] = ["SFFF", "FHFH", "HFFG"]
-MAPS["5x5"] = [
-    'FFFFH',
-    'HHFFF',
-    'HFFFF',
-    'FHFFF',
-    'FFFFF']
+MAPS["5x5"] = ['FFFFH', 'HHFFF', 'HFFFF', 'FHFFF', 'FFFFF']
 MAPS["10x10"] = [
-    'HFFFFFFFFF',
-    'HFFFFFFFFH',
-    'FFFFFFHFHF',
-    'FFFFFFFHFF',
-    'FFFFFFFFHF',
-    'FFFHFFHFHF',
-    'FFFFFFFFFF',
-    'FFFFFFFFFF',
-    'FHFFFFFFFF',
-    'FFFFHFFFFF']
-
-DIRECTIONS = np.array([
-    [0, -1],
-    [1, 0],
-    [0, 1],
-    [-1, 0],
-])
+    'HFFFFFFFFF', 'HFFFFFFFFH', 'FFFFFFHFHF', 'FFFFFFFHFF', 'FFFFFFFFHF', 'FFFHFFHFHF',
+    'FFFFFFFFFF', 'FFFFFFFFFF', 'FHFFFFFFFF', 'FFFFHFFFFF'
+]
 
 
 class FrozenLakeEnv(gym.envs.toy_text.frozen_lake.FrozenLakeEnv):
     def __init__(self,
                  map_dims: Tuple[int, int] = (4, 4),
+                 default_reward: float = 0.,
                  is_slippery: bool = False,
                  random_start: bool = False,
                  random_goal: bool = False,
                  random_map=False):
 
+        self.default_reward = default_reward or 0
         self.is_slippery = is_slippery
         self.random_start = random_start
         self.random_goal = random_goal
@@ -72,27 +61,27 @@ class FrozenLakeEnv(gym.envs.toy_text.frozen_lake.FrozenLakeEnv):
         desc[self.start] = b'S'
         desc[self.goal] = b'G'
         self.reverse = {
-            0: 2,  # left -> right
-            2: 0,  # right -> left
-            1: 3,  # down -> up
-            3: 1  # up -> down
+            1: 3,  # left -> right
+            3: 1,  # right -> left
+            2: 4,  # down -> up
+            4: 2  # up -> down
         }
         super().__init__(desc=desc, is_slippery=is_slippery)
+        for i in range(self.nrow):
+            for j in range(self.ncol):
+                self.set_transitions((i, j))
 
-        if self.random_goal:
-            size_obs = self.observation_space.n * 2
-        else:
-            size_obs = self.observation_space.n
-        self.observation_space = Box(low=np.zeros(size_obs), high=np.ones(size_obs))
+        self.observation_space = Discrete(4)
+        self.action_space = Discrete(5)
 
     def inc(self, row, col, a):
-        if a == 0:  # left
+        if a == 1:  # left
             col = max(col - 1, 0)
-        elif a == 1:  # down
+        elif a == 2:  # down
             row = min(row + 1, self.nrow - 1)
-        elif a == 2:  # right
+        elif a == 3:  # right
             col = min(col + 1, self.ncol - 1)
-        elif a == 3:  # up
+        elif a == 4:  # up
             row = max(row - 1, 0)
         return row, col
 
@@ -101,7 +90,7 @@ class FrozenLakeEnv(gym.envs.toy_text.frozen_lake.FrozenLakeEnv):
         while n_steps > 0:
             explored.append(pos)
             next_positions = [
-                self.inc(*pos, d) for d in range(4) if not self.inc(*pos, d) in explored
+                self.inc(*pos, d) for d in range(5) if not self.inc(*pos, d) in explored
                 and not self.desc[self.inc(*pos, d)] == b'H'
             ]
             if not next_positions:
@@ -113,14 +102,14 @@ class FrozenLakeEnv(gym.envs.toy_text.frozen_lake.FrozenLakeEnv):
     def set_transition(self, pos: Union[tuple, np.ndarray], actions: Iterable = None):
         pos = tuple(pos)
         s = self.to_s(*pos)
-        actions = actions or range(4)  # type: Iterable
+        actions = actions or range(5)  # type: Iterable
         for a in actions:
             letter = self.desc[pos]
             if letter in b'GH':
                 self.P[s][a] = [(1.0, s, 0, True)]
             else:
                 if self.is_slippery:
-                    for b in [(a - 1) % 4, a, (a + 1) % 4]:
+                    for b in [(a - 1) % 5, a, (a + 1) % 5]:
                         newrow, newcol = self.inc(*pos, b)
                         newstate = self.to_s(newrow, newcol)
                         newletter = self.desc[newrow, newcol]
@@ -137,7 +126,7 @@ class FrozenLakeEnv(gym.envs.toy_text.frozen_lake.FrozenLakeEnv):
 
     def set_transitions(self, pos: Union[tuple, np.ndarray]):
         self.set_transition(pos)
-        for a in range(4):
+        for a in range(5):
             adjacent = self.inc(*pos, a)
             if adjacent != pos:
                 self.set_transition(adjacent, actions=[self.reverse[a]])
@@ -149,7 +138,7 @@ class FrozenLakeEnv(gym.envs.toy_text.frozen_lake.FrozenLakeEnv):
         self.desc[new_pos] = letter
 
     def goal_vector(self):
-        return self.one_hotify(self.to_s(*self.goal))
+        return np.array(self.goal)
 
     def reset(self):
         time.sleep(1)
@@ -182,7 +171,7 @@ class FrozenLakeEnv(gym.envs.toy_text.frozen_lake.FrozenLakeEnv):
             assert self.desc[new_goal] == b'G'
             if old_goal != new_goal:
                 assert self.desc[old_goal] != b'G'
-            for d in range(4):
+            for d in range(5):
                 pos = self.inc(*new_goal, d)
                 if pos != new_goal:
                     transition = self.P[self.to_s(*pos)][self.reverse[d]][0]
@@ -199,31 +188,55 @@ class FrozenLakeEnv(gym.envs.toy_text.frozen_lake.FrozenLakeEnv):
 
             self.goal = new_goal
 
-        if self.random_goal:
-            observation = Observation(
-                observation=self.one_hotify(super().reset()), goal=self.goal_vector())
-            return observation
-        else:
-            return self.one_hotify(super().reset())
+        return Observation(
+            observation=self.preprocess(super().reset()), goal=self.goal_vector())
 
     def to_s(self, row, col):
         return row * self.ncol + col
 
+    def from_s(self, s):
+        return np.array([s // self.ncol, s % self.ncol])
+
     def step(self, a):
         s, r, t, i = super().step(a)
-        s = self.one_hotify(s)
-        if self.random_goal:
-            s = Observation(observation=s, goal=self.goal_vector())
+        s = self.preprocess(s)
+        s = Observation(observation=s, goal=self.goal_vector())
         if r == 0:
-            r = -.1
+            r = self.default_reward
         i['log count'] = {'successes': float(r > 0)}
         return s, r, t, i
 
-    def one_hotify(self, s):
-        array = np.zeros(self.nS)
-        array[s] = 1
-        return array
+    # def step(self, s: int):
+    #     self.s = s
+    #     s2d = self.from_s(s)
+    #     self.lastaction = s2d
+    #     newletter = self.desc[tuple(s2d)]
+    #     o = Observation(observation=s2d, goal=self.goal_vector())
+    #     r = float(newletter == b'G')
+    #     t = bytes(newletter) in b'GH'
+    #     i = {}
+    #     if r == 0:
+    #         r = self.default_reward
+    #     i['log count'] = {'successes': float(r > 0)}
+    #     return o, r, t, i
 
-    def render(self, *args, **kwargs):
+    def preprocess(self, s):
+        return s // self.nrow, s % self.ncol
+
+    def render(self, mode='human'):
         time.sleep(.5)
-        return super().render(*args, **kwargs)
+        outfile = StringIO() if mode == 'ansi' else sys.stdout
+
+        row, col = self.s // self.ncol, self.s % self.ncol
+        desc = self.desc.tolist()
+        desc = [[c.decode('utf-8') for c in line] for line in desc]
+        desc[row][col] = utils.colorize(desc[row][col], "red", highlight=True)
+        if self.lastaction is not None:
+            outfile.write("  ({})\n".format(["Stay", "Left", "Down", "Right",
+                                             "Up"][self.lastaction]))
+        else:
+            outfile.write("\n")
+        outfile.write("\n".join(''.join(line) for line in desc) + "\n")
+
+        if mode != 'human':
+            return outfile
