@@ -36,3 +36,6 @@ src
 MUJOCO_LOG.TXT
 .ropeproject
 .venv
+.runsrc
+run.json
+runs.db
