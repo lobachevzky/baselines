@@ -117,7 +117,7 @@ def cli():
     parser.add_argument('--goal-learning-rate', type=float)
     parser.add_argument('--nminibatches', type=int, required=True)
     parser.add_argument('--nsteps', type=int, required=True)
-    parser.add_argument('--learning-rate', type=float, required=True)
+    parser.add_argument('--learning-rate', type=eval, required=True)
     parser.add_argument('--grad-clip', type=float, required=True)
     parser.add_argument('--logdir', type=str, default=None)
 
