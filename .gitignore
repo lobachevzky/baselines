@@ -39,3 +39,4 @@ MUJOCO_LOG.TXT
 .runsrc
 run.json
 runs.db
+.runs
