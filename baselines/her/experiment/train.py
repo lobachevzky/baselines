@@ -26,7 +26,7 @@ def mpi_average(value):
 
 def train(policy, rollout_worker, evaluator,
           n_epochs, n_test_rollouts, n_cycles, n_batches, policy_save_interval,
-          save_policies, **kwargs):
+          save_policies, demo_file, **kwargs):
     rank = MPI.COMM_WORLD.Get_rank()
 
     latest_policy_path = os.path.join(logger.get_dir(), 'policy_latest.pkl')
@@ -35,6 +35,8 @@ def train(policy, rollout_worker, evaluator,
 
     logger.info("Training...")
     best_success_rate = -1
+
+    if policy.bc_loss == 1: policy.initDemoBuffer(demo_file) #initialize demo buffer if training with demonstrations
     for epoch in range(n_epochs):
         # train
         rollout_worker.clear_history()
@@ -84,7 +86,7 @@ def train(policy, rollout_worker, evaluator,
 
 def launch(
     env, logdir, n_epochs, num_cpu, seed, replay_strategy, policy_save_interval, clip_return,
-    override_params={}, save_policies=True
+    demo_file, override_params={}, save_policies=True
 ):
     # Fork for multi-CPU MPI implementation.
     if num_cpu > 1:
@@ -140,7 +142,6 @@ def launch(
         logger.warn()
 
     dims = config.configure_dims(params)
-
     policy = config.configure_ddpg(dims=dims, params=params, clip_return=clip_return)
 
     rollout_params = {
@@ -173,18 +174,19 @@ def launch(
         logdir=logdir, policy=policy, rollout_worker=rollout_worker,
         evaluator=evaluator, n_epochs=n_epochs, n_test_rollouts=params['n_test_rollouts'],
         n_cycles=params['n_cycles'], n_batches=params['n_batches'],
-        policy_save_interval=policy_save_interval, save_policies=save_policies)
+        policy_save_interval=policy_save_interval, save_policies=save_policies, demo_file=demo_file)
 
 
 @click.command()
 @click.option('--env', type=str, default='FetchReach-v1', help='the name of the OpenAI Gym environment that you want to train on')
 @click.option('--logdir', type=str, default=None, help='the path to where logs and policy pickles should go. If not specified, creates a folder in /tmp/')
-@click.option('--n-epochs', type=int, default=50, help='the number of training epochs to run')
-@click.option('--num-cpu', type=int, default=1, help='the number of CPU cores to use (using MPI)')
+@click.option('--n_epochs', type=int, default=50, help='the number of training epochs to run')
+@click.option('--num_cpu', type=int, default=1, help='the number of CPU cores to use (using MPI)')
 @click.option('--seed', type=int, default=0, help='the random seed used to seed both the environment and the training code')
-@click.option('--policy-save-interval', type=int, default=5, help='the interval with which policy pickles are saved. If set to 0, only the best and latest policy will be pickled.')
-@click.option('--replay-strategy', type=click.Choice(['future', 'none']), default='future', help='the HER replay strategy to be used. "future" uses HER, "none" disables HER.')
-@click.option('--clip-return', type=int, default=1, help='whether or not returns should be clipped')
+@click.option('--policy_save_interval', type=int, default=5, help='the interval with which policy pickles are saved. If set to 0, only the best and latest policy will be pickled.')
+@click.option('--replay_strategy', type=click.Choice(['future', 'none']), default='future', help='the HER replay strategy to be used. "future" uses HER, "none" disables HER.')
+@click.option('--clip_return', type=int, default=1, help='whether or not returns should be clipped')
+@click.option('--demo_file', type=str, default = 'PATH/TO/DEMO/DATA/FILE.npz', help='demo data file path')
 def main(**kwargs):
     launch(**kwargs)
 

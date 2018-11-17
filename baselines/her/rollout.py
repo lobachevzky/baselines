@@ -2,7 +2,7 @@ from collections import deque
 
 import numpy as np
 import pickle
-# from mujoco_py import MujocoException
+from mujoco_py import MujocoException
 
 from baselines.her.util import convert_episode_to_batch_major, store_args
 
@@ -31,9 +31,7 @@ class RolloutWorker:
             history_len (int): length of history for statistics smoothing
             render (boolean): whether or not to render the rollouts
         """
-
         self.envs = [make_env() for _ in range(rollout_batch_size)]
-
         assert self.T > 0
 
         self.info_keys = [key.replace('info_', '') for key in dims.keys() if key.startswith('info_')]
@@ -102,23 +100,23 @@ class RolloutWorker:
             success = np.zeros(self.rollout_batch_size)
             # compute new states and observations
             for i in range(self.rollout_batch_size):
-                # try:
-                # We fully ignore the reward here because it will have to be re-computed
-                # for HER.
-                curr_o_new, _, _, info = self.envs[i].step(u[i])
-                if 'is_success' in info:
-                    success[i] = info['is_success']
-                o_new[i] = curr_o_new['observation']
-                ag_new[i] = curr_o_new['achieved_goal']
-                for idx, key in enumerate(self.info_keys):
-                    info_values[idx][t, i] = info[key]
-                if self.render:
-                    self.envs[i].render()
-                # except MujocoException as e:
-                    # return self.generate_rollouts()
+                try:
+                    # We fully ignore the reward here because it will have to be re-computed
+                    # for HER.
+                    curr_o_new, _, _, info = self.envs[i].step(u[i])
+                    if 'is_success' in info:
+                        success[i] = info['is_success']
+                    o_new[i] = curr_o_new['observation']
+                    ag_new[i] = curr_o_new['achieved_goal']
+                    for idx, key in enumerate(self.info_keys):
+                        info_values[idx][t, i] = info[key]
+                    if self.render:
+                        self.envs[i].render()
+                except MujocoException as e:
+                    return self.generate_rollouts()
 
             if np.isnan(o_new).any():
-                self.logger.warning('NaN caught during rollout generation. Trying again...')
+                self.logger.warn('NaN caught during rollout generation. Trying again...')
                 self.reset_all_rollouts()
                 return self.generate_rollouts()
 

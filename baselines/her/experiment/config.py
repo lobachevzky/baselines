@@ -1,19 +1,17 @@
 import numpy as np
 import gym
-import numpy as np
-from gym.wrappers import TimeLimit
-from pathlib import Path
 
 from baselines import logger
 from baselines.her.ddpg import DDPG
 from baselines.her.her import make_sample_her_transitions
-from environments.multi_task import MultiTaskEnv
+
 
 DEFAULT_ENV_PARAMS = {
     'FetchReach-v1': {
         'n_cycles': 10,
     },
 }
+
 
 DEFAULT_PARAMS = {
     # env
@@ -46,7 +44,15 @@ DEFAULT_PARAMS = {
     # normalization
     'norm_eps': 0.01,  # epsilon used for observation normalization
     'norm_clip': 5,  # normalized observations are cropped to this values
+
+    'bc_loss': 0, # whether or not to use the behavior cloning loss as an auxilliary loss
+    'q_filter': 0, # whether or not a Q value filter should be used on the Actor outputs
+    'num_demo': 100, # number of expert demo episodes
+    'demo_batch_size': 128, #number of samples to be used from the demonstrations buffer, per mpi thread 128/1024 or 32/256
+    'prm_loss_weight': 0.001, #Weight corresponding to the primary loss
+    'aux_loss_weight':  0.0078, #Weight corresponding to the auxilliary loss also called the cloning loss
 }
+
 
 CACHED_ENVS = {}
 
@@ -70,24 +76,7 @@ def prepare_params(kwargs):
     env_name = kwargs['env_name']
 
     def make_env():
-        if env_name == 'MultiTask':
-            return TimeLimit(
-                max_episode_steps=200,
-                env=MultiTaskEnv(
-                    geofence=.06,
-                    xml_filepath=Path('models/world.xml'),
-                    steps_per_action=200,
-                    obs_type='robot_qvel',
-                    render_freq=0,
-                    record=None,
-                    record_path=None,
-                    record_freq=None,
-                    image_dimensions=None,
-                    fixed_block=True,
-                    fixed_goal=np.array([.08, .16, .401]),
-                ))
         return gym.make(env_name)
-
     kwargs['make_env'] = make_env
     tmp_env = cached_make_env(kwargs['make_env'])
     assert hasattr(tmp_env, '_max_episode_steps')
@@ -163,6 +152,12 @@ def configure_ddpg(dims, params, reuse=False, use_mpi=True, clip_return=True):
                         'subtract_goals': simple_goal_subtract,
                         'sample_transitions': sample_her_transitions,
                         'gamma': gamma,
+                        'bc_loss': params['bc_loss'],
+                        'q_filter': params['q_filter'],
+                        'num_demo': params['num_demo'],
+                        'demo_batch_size': params['demo_batch_size'],
+                        'prm_loss_weight': params['prm_loss_weight'],
+                        'aux_loss_weight': params['aux_loss_weight'],
                         })
     ddpg_params['info'] = {
         'env_name': params['env_name'],

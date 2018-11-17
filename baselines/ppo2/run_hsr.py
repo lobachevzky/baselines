@@ -1,88 +1,122 @@
 #!/usr/bin/env python3
-import click
+import argparse
+import multiprocessing
+
 import numpy as np
 import tensorflow as tf
 from gym.wrappers import TimeLimit
+from scripts.hsr import env_wrapper, ACTIVATIONS, parse_activation, \
+    add_wrapper_args, add_env_args, parse_groups
 
 from baselines import bench, logger
 from baselines.common import set_global_seeds
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
-from baselines.ppo2.networks import MlpPolicy
-from environments.pick_and_place import PickAndPlaceEnv
+from baselines.ppo2.defaults import mujoco
+from baselines.ppo2.hsr_wrapper import HSREnv, MoveGripperEnv
 
 
-@click.command()
-@click.option('--seed', default=1, type=int)
-@click.option('--max-steps', default=300, type=int)
-@click.option('--steps-per-action', default=200, type=int)
-@click.option('--fixed-block', is_flag=True)
-@click.option('--min-lift-height', default=.02, type=float)
-@click.option('--geofence', default=.4, type=float)
-@click.option('--max-grad-norm', default=.5, type=float)
-@click.option('--n-layers', default=2, type=int)
-@click.option('--n-hidden', default=128, type=int)
-@click.option('--n-steps', default=2048, type=int)
-@click.option('--tanh', 'activation', flag_value=tf.nn.tanh)
-@click.option('--relu', 'activation', flag_value=tf.nn.relu, default=True)
-@click.option('--logdir', type=str)
-def cli(max_steps, steps_per_action, fixed_block, min_lift_height, geofence, seed,
-        logdir, n_mini_batch, n_steps, n_layers, n_hidden, activation, max_grad_norm):
+@env_wrapper
+def main(
+        max_steps,
+        seed,
+        logdir,
+        env,
+        ncpu,
+        goal_lr,
+        goal_activation,
+        goal_n_layers,
+        goal_layer_size,
+        env_args,
+        **kwargs
+):
+
     format_strs = ['stdout']
     if logdir:
         format_strs += ['tensorboard']
     logger.configure(format_strs=format_strs, dir=logdir)
-    env = TimeLimit(
-        max_episode_steps=max_steps,
-        env=PickAndPlaceEnv(
-            discrete=False,
-            cheat_prob=0,
-            steps_per_action=steps_per_action,
-            fixed_block=fixed_block,
-            min_lift_height=min_lift_height,
-            geofence=geofence,
-            xml_file='world.xml',
-            render_freq=0,
-        ))
-    ncpu = 1
+    ncpu = ncpu or multiprocessing.cpu_count()
     config = tf.ConfigProto(allow_soft_placement=True,
                             intra_op_parallelism_threads=ncpu,
                             inter_op_parallelism_threads=ncpu)
     tf.Session(config=config).__enter__()
 
     def make_env():
-        return bench.Monitor(env, logger.get_dir(), allow_early_resets=True)
+        return bench.Monitor(
+            TimeLimit(max_episode_steps=max_steps, env=env(**env_args)),
+            logger.get_dir(), allow_early_resets=True)
 
     env = DummyVecEnv([make_env])
     env = VecNormalize(env)
 
     set_global_seeds(seed)
 
-    def policy(*args, **kwargs):
-        return MlpPolicy(
-            n_hidden=n_hidden,
-            n_layers=n_layers,
-            activation=activation,
-            *args, **kwargs)
-
-    model = ppo2.learn(policy=policy, env=env, n_steps=n_steps, n_mini_batches=n_mini_batch,
-                       max_grad_norm=max_grad_norm,
-                       lam=0.95, gamma=0.99, n_opt_epochs=10, log_interval=1,
-                       ent_coef=0.0,
-                       lr=3e-4,
-                       clip_range=0.2,
-                       total_time_steps=1e20,
-                       remember_states=False)
+    model = ppo2.learn(network='mlp', env=env,
+                       total_timesteps=1e20,
+                       eval_env=env,
+                       **kwargs)
 
     # Run trained model
     logger.log("Running trained model")
-    obs = np.zeros((env.num_envs,) + env.observation_space.shape)
+    obs = np.zeros((1,) + env.observation_space.shape)
     obs[:] = env.reset()
     while True:
         actions = model.step(obs)[0]
         obs[:] = env.step(actions)[0]
         env.render()
+
+
+ENVIRONMENTS = dict(
+    move_block=HSREnv,
+    move_gripper=MoveGripperEnv,
+)
+
+
+def cli():
+    parser = argparse.ArgumentParser()
+
+    add_wrapper_args(parser=parser.add_argument_group('wrapper_args'))
+    add_env_args(parser=parser.add_argument_group('env_args'))
+
+    parser.add_argument(
+        '--env',
+        choices=ENVIRONMENTS.values(),
+        type=lambda k: ENVIRONMENTS[k],
+        default=HSREnv)
+    parser.add_argument('--max-steps', type=int, required=True)
+    parser.add_argument('--ncpu', type=int)
+    parser.add_argument(
+        '--goal-activation',
+        type=parse_activation,
+        default=tf.nn.relu,
+        choices=ACTIVATIONS.values())
+    parser.add_argument('--goal-n-layers', type=int)
+    parser.add_argument('--goal-layer-size', type=int)
+    parser.add_argument('--goal-lr', type=eval)
+    parser.add_argument('--logdir', type=str, default=None)
+    parser.add_argument('--seed', type=int, required=True)
+    parser.add_argument('--max-grad-norm', type=float, required=True)
+    parser.add_argument('--num-layers', type=int, required=True)
+    parser.add_argument('--num-hidden', type=int, required=True)
+    parser.add_argument(
+        '--activation',
+        type=parse_activation,
+        default=tf.nn.relu,
+        choices=ACTIVATIONS.values())
+    parser.add_argument('--nsteps', type=int)
+    parser.add_argument('--nminibatches', type=int)
+    parser.add_argument('--lam', type=float)
+    parser.add_argument('--gamma', type=float)
+    parser.add_argument('--noptepochs', type=int)
+    parser.add_argument('--log-interval', type=int)
+    parser.add_argument('--ent-coef', type=float)
+    parser.add_argument('--lr', type=eval)
+    parser.add_argument('--cliprange', type=float)
+    parser.add_argument('--value-network')
+    parser.set_defaults(**mujoco())
+
+    main(**(parse_groups(parser)))
 
 
 if __name__ == '__main__':
