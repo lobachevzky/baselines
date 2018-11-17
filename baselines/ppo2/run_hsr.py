@@ -16,6 +16,9 @@ from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
 from baselines.ppo2.hsr_wrapper import HSREnv, MoveGripperEnv
 
+def parse_lr(string: str) -> callable:
+    return lambda f: float(string) * f
+
 
 @env_wrapper
 def main(
@@ -111,7 +114,7 @@ def cli():
     parser.add_argument('--noptepochs', type=int)
     parser.add_argument('--log-interval', type=int)
     parser.add_argument('--ent-coef', type=float)
-    parser.add_argument('--lr', type=eval)
+    parser.add_argument('--lr', type=parse_lr)
     parser.add_argument('--cliprange', type=float)
     parser.add_argument('--value-network')
     parser.set_defaults(**mujoco())
