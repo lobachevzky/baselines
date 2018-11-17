@@ -42,6 +42,8 @@ setup(name='baselines',
           'click',
           'opencv-python'
       ],
+      entry_points=dict(console_scripts=[
+          'hsr=baselines.ppo2.run_hsr:cli',]),
       extras_require=extras,
       description='OpenAI baselines: high quality implementations of reinforcement learning algorithms',
       author='OpenAI',

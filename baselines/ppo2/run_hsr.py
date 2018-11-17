@@ -68,8 +68,7 @@ def main(
                        lr=learning_rate,
                        num_layers=num_layers,
                        num_hidden=num_hidden,
-                       activation=activation
-                       )
+                       activation=activation)
 
     # Run trained model
     logger.log("Running trained model")
