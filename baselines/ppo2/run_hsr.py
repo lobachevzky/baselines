@@ -13,6 +13,7 @@ from baselines.common import set_global_seeds
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
+from baselines.ppo2.defaults import mujoco
 from baselines.ppo2.hsr_wrapper import HSREnv, MoveGripperEnv
 
 
@@ -20,21 +21,16 @@ from baselines.ppo2.hsr_wrapper import HSREnv, MoveGripperEnv
 def main(
         max_steps,
         seed,
-        grad_clip,
-        nminibatches,
         logdir,
         env,
-        nsteps,
         ncpu,
-        activation,
-        num_layers,
-        num_hidden,
-        learning_rate,
-        goal_learning_rate,
+        goal_lr,
         goal_activation,
         goal_n_layers,
         goal_layer_size,
-        env_args):
+        env_args,
+        **kwargs
+):
 
     format_strs = ['stdout']
     if logdir:
@@ -59,16 +55,7 @@ def main(
     model = ppo2.learn(network='mlp', env=env,
                        total_timesteps=1e20,
                        eval_env=env,
-                       seed=seed,
-                       nsteps=nsteps,
-                       max_grad_norm=grad_clip,
-                       nminibatches=nminibatches,
-                       lam=0.95, gamma=0.99, log_interval=1,
-                       ent_coef=0.0,
-                       lr=learning_rate,
-                       num_layers=num_layers,
-                       num_hidden=num_hidden,
-                       activation=activation)
+                       **kwargs)
 
     # Run trained model
     logger.log("Running trained model")
@@ -99,14 +86,6 @@ def cli():
         default=HSREnv)
     parser.add_argument('--max-steps', type=int, required=True)
     parser.add_argument('--ncpu', type=int)
-    parser.add_argument('--seed', type=int, required=True)
-    parser.add_argument(
-        '--activation',
-        type=parse_activation,
-        default=tf.nn.relu,
-        choices=ACTIVATIONS.values())
-    parser.add_argument('--num-layers', type=int, required=True)
-    parser.add_argument('--num-hidden', type=int, required=True)
     parser.add_argument(
         '--goal-activation',
         type=parse_activation,
@@ -114,12 +93,28 @@ def cli():
         choices=ACTIVATIONS.values())
     parser.add_argument('--goal-n-layers', type=int)
     parser.add_argument('--goal-layer-size', type=int)
-    parser.add_argument('--goal-learning-rate', type=float)
-    parser.add_argument('--nminibatches', type=int, required=True)
-    parser.add_argument('--nsteps', type=int, required=True)
-    parser.add_argument('--learning-rate', type=eval, required=True)
-    parser.add_argument('--grad-clip', type=float, required=True)
+    parser.add_argument('--goal-lr', type=eval)
     parser.add_argument('--logdir', type=str, default=None)
+    parser.add_argument('--seed', type=int, required=True)
+    parser.add_argument('--max-grad-norm', type=float, required=True)
+    parser.add_argument('--num-layers', type=int, required=True)
+    parser.add_argument('--num-hidden', type=int, required=True)
+    parser.add_argument(
+        '--activation',
+        type=parse_activation,
+        default=tf.nn.relu,
+        choices=ACTIVATIONS.values())
+    parser.add_argument('--nsteps', type=int)
+    parser.add_argument('--nminibatches', type=int)
+    parser.add_argument('--lam', type=float)
+    parser.add_argument('--gamma', type=float)
+    parser.add_argument('--noptepochs', type=int)
+    parser.add_argument('--log-interval', type=int)
+    parser.add_argument('--ent-coef', type=float)
+    parser.add_argument('--lr', type=eval)
+    parser.add_argument('--cliprange', type=float)
+    parser.add_argument('--value-network')
+    parser.set_defaults(**mujoco())
 
     main(**(parse_groups(parser)))
 
