@@ -16,53 +16,43 @@ from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
 from baselines.ppo2.hsr_wrapper import HSREnv, MoveGripperEnv
 
+
 def parse_lr(string: str) -> callable:
     return lambda f: float(string) * f
 
 
 @env_wrapper
-def main(
-        max_steps,
-        seed,
-        logdir,
-        env,
-        ncpu,
-        goal_lr,
-        goal_activation,
-        goal_n_layers,
-        goal_layer_size,
-        env_args,
-        **kwargs
-):
+def main(max_steps, seed, logdir, env, ncpu, goal_lr, goal_activation,
+         goal_n_layers, goal_layer_size, env_args, **kwargs):
 
     format_strs = ['stdout']
     if logdir:
         format_strs += ['tensorboard']
     logger.configure(format_strs=format_strs, dir=logdir)
     ncpu = ncpu or multiprocessing.cpu_count()
-    config = tf.ConfigProto(allow_soft_placement=True,
-                            intra_op_parallelism_threads=ncpu,
-                            inter_op_parallelism_threads=ncpu)
+    config = tf.ConfigProto(
+        allow_soft_placement=True,
+        intra_op_parallelism_threads=ncpu,
+        inter_op_parallelism_threads=ncpu)
     tf.Session(config=config).__enter__()
 
     def make_env():
         return bench.Monitor(
             TimeLimit(max_episode_steps=max_steps, env=env(**env_args)),
-            logger.get_dir(), allow_early_resets=True)
+            logger.get_dir(),
+            allow_early_resets=True)
 
     env = DummyVecEnv([make_env])
     env = VecNormalize(env)
 
     set_global_seeds(seed)
 
-    model = ppo2.learn(network='mlp', env=env,
-                       total_timesteps=1e20,
-                       eval_env=env,
-                       **kwargs)
+    model = ppo2.learn(
+        network='mlp', env=env, total_timesteps=1e20, eval_env=env, **kwargs)
 
     # Run trained model
     logger.log("Running trained model")
-    obs = np.zeros((1,) + env.observation_space.shape)
+    obs = np.zeros((1, ) + env.observation_space.shape)
     obs[:] = env.reset()
     while True:
         actions = model.step(obs)[0]
