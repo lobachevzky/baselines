@@ -34,12 +34,8 @@ def main(
         goal_activation,
         goal_n_layers,
         goal_layer_size,
-        env_args,
-        **kwargs):
-    env_class = env
-    env = TimeLimit(
-        max_episode_steps=max_steps,
-        env=env_class(**env_args))
+        env_args):
+
     format_strs = ['stdout']
     if logdir:
         format_strs += ['tensorboard']
@@ -52,7 +48,7 @@ def main(
 
     def make_env():
         return bench.Monitor(
-            TimeLimit(max_episode_steps=max_steps, env=env_class(**env_args)),
+            TimeLimit(max_episode_steps=max_steps, env=env(**env_args)),
             logger.get_dir(), allow_early_resets=True)
 
     env = DummyVecEnv([make_env])
@@ -84,10 +80,12 @@ def main(
         obs[:] = env.step(actions)[0]
         env.render()
 
+
 ENVIRONMENTS = dict(
     move_block=HSREnv,
     move_gripper=MoveGripperEnv,
 )
+
 
 def cli():
     parser = argparse.ArgumentParser()
@@ -121,10 +119,8 @@ def cli():
     parser.add_argument('--nminibatches', type=int, required=True)
     parser.add_argument('--nsteps', type=int, required=True)
     parser.add_argument('--learning-rate', type=float, required=True)
-    parser.add_argument('--n-goals', type=int)
     parser.add_argument('--grad-clip', type=float, required=True)
     parser.add_argument('--logdir', type=str, default=None)
-    parser.add_argument('--save-threshold', type=int, default=None)
 
     main(**(parse_groups(parser)))
 
