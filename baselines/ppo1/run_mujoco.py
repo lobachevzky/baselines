@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-import gym
 import logging
 
-from baselines import bench
-from baselines import logger
-from baselines.common import set_global_seeds, tf_util as U
+import gym
+
+from baselines import bench, logger
+from baselines.common import set_global_seeds
+from baselines.common import tf_util as U
 
 
 def train(env_id, num_timesteps, seed):
@@ -14,25 +15,37 @@ def train(env_id, num_timesteps, seed):
     env = gym.make(env_id)
 
     def policy_fn(name, ob_space, ac_space):
-        return mlp_policy.MlpPolicy(name=name, ob_space=ob_space, ac_space=ac_space,
-                                    hid_size=64, num_hid_layers=2)
+        return mlp_policy.MlpPolicy(
+            name=name,
+            ob_space=ob_space,
+            ac_space=ac_space,
+            hid_size=64,
+            num_hid_layers=2)
 
     env = bench.Monitor(env, logger.get_dir())
     env.seed(seed)
     gym.logger.setLevel(logging.WARN)
-    pposgd_simple.learn(env, policy_fn,
-                        max_timesteps=num_timesteps,
-                        timesteps_per_actorbatch=2048,
-                        clip_param=0.2, entcoeff=0.0,
-                        optim_epochs=10, optim_stepsize=3e-4, optim_batchsize=64,
-                        gamma=0.99, lam=0.95, schedule='linear',
-                        )
+    pposgd_simple.learn(
+        env,
+        policy_fn,
+        max_timesteps=num_timesteps,
+        timesteps_per_actorbatch=2048,
+        clip_param=0.2,
+        entcoeff=0.0,
+        optim_epochs=10,
+        optim_stepsize=3e-4,
+        optim_batchsize=64,
+        gamma=0.99,
+        lam=0.95,
+        schedule='linear',
+    )
     env.close()
 
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--env', help='environment ID', default='Hopper-v1')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--num-timesteps', type=int, default=int(1e6))

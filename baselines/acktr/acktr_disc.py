@@ -7,19 +7,31 @@ import tensorflow as tf
 
 from baselines import logger
 from baselines.acktr import kfac
-from baselines.acktr.utils import Scheduler, find_trainable_variables
-from baselines.acktr.utils import cat_entropy, mse
-from baselines.acktr.utils import discount_with_dones
-from baselines.common import set_global_seeds, explained_variance
+from baselines.acktr.utils import Scheduler, cat_entropy, discount_with_dones, find_trainable_variables, mse
+from baselines.common import explained_variance, set_global_seeds
 
 
 class Model(object):
-    def __init__(self, policy, ob_space, ac_space, nenvs, total_timesteps, nprocs=32, nsteps=20,
-                 nstack=4, ent_coef=0.01, vf_coef=0.5, vf_fisher_coef=1.0, lr=0.25, max_grad_norm=0.5,
-                 kfac_clip=0.001, lrschedule='linear'):
-        config = tf.ConfigProto(allow_soft_placement=True,
-                                intra_op_parallelism_threads=nprocs,
-                                inter_op_parallelism_threads=nprocs)
+    def __init__(self,
+                 policy,
+                 ob_space,
+                 ac_space,
+                 nenvs,
+                 total_timesteps,
+                 nprocs=32,
+                 nsteps=20,
+                 nstack=4,
+                 ent_coef=0.01,
+                 vf_coef=0.5,
+                 vf_fisher_coef=1.0,
+                 lr=0.25,
+                 max_grad_norm=0.5,
+                 kfac_clip=0.001,
+                 lrschedule='linear'):
+        config = tf.ConfigProto(
+            allow_soft_placement=True,
+            intra_op_parallelism_threads=nprocs,
+            inter_op_parallelism_threads=nprocs)
         config.gpu_options.allow_growth = True
         self.sess = sess = tf.Session(config=config)
         nact = ac_space.n
@@ -30,10 +42,13 @@ class Model(object):
         PG_LR = tf.placeholder(tf.float32, [])
         VF_LR = tf.placeholder(tf.float32, [])
 
-        self.model = step_model = policy(sess, ob_space, ac_space, nenvs, 1, nstack, reuse=False)
-        self.model2 = train_model = policy(sess, ob_space, ac_space, nenvs, nsteps, nstack, reuse=True)
+        self.model = step_model = policy(
+            sess, ob_space, ac_space, nenvs, 1, nstack, reuse=False)
+        self.model2 = train_model = policy(
+            sess, ob_space, ac_space, nenvs, nsteps, nstack, reuse=True)
 
-        logpac = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=train_model.pi, labels=A)
+        logpac = tf.nn.sparse_softmax_cross_entropy_with_logits(
+            logits=train_model.pi, labels=A)
         self.logits = logits = train_model.pi
 
         ##training loss
@@ -45,8 +60,9 @@ class Model(object):
 
         ##Fisher loss construction
         self.pg_fisher = pg_fisher_loss = -tf.reduce_mean(logpac)
-        sample_net = train_model.vf + tf.random_normal(tf.shape(train_model.vf))
-        self.vf_fisher = vf_fisher_loss = - vf_fisher_coef * tf.reduce_mean(
+        sample_net = train_model.vf + tf.random_normal(
+            tf.shape(train_model.vf))
+        self.vf_fisher = vf_fisher_loss = -vf_fisher_coef * tf.reduce_mean(
             tf.pow(train_model.vf - tf.stop_gradient(sample_net), 2))
         self.joint_fisher = joint_fisher_loss = pg_fisher_loss + vf_fisher_loss
 
@@ -60,8 +76,10 @@ class Model(object):
                                                     stats_decay=0.99, async=1, cold_iter=10,
                                                     max_grad_norm=max_grad_norm)
 
-            update_stats_op = optim.compute_and_apply_stats(joint_fisher_loss, var_list=params)
-            train_op, q_runner = optim.apply_gradients(list(zip(grads, params)))
+            update_stats_op = optim.compute_and_apply_stats(
+                joint_fisher_loss, var_list=params)
+            train_op, q_runner = optim.apply_gradients(
+                list(zip(grads, params)))
         self.q_runner = q_runner
         self.lr = Scheduler(v=lr, nvalues=total_timesteps, schedule=lrschedule)
 
@@ -70,15 +88,19 @@ class Model(object):
             for step in range(len(obs)):
                 cur_lr = self.lr.value()
 
-            td_map = {train_model.X: obs, A: actions, ADV: advs, R: rewards, PG_LR: cur_lr}
+            td_map = {
+                train_model.X: obs,
+                A: actions,
+                ADV: advs,
+                R: rewards,
+                PG_LR: cur_lr
+            }
             if states != []:
                 td_map[train_model.S] = states
                 td_map[train_model.M] = masks
 
             policy_loss, value_loss, policy_entropy, _ = sess.run(
-                [pg_loss, vf_loss, entropy, train_op],
-                td_map
-            )
+                [pg_loss, vf_loss, entropy, train_op], td_map)
             return policy_loss, value_loss, policy_entropy
 
         def save(save_path):
@@ -126,7 +148,8 @@ class Runner(object):
         mb_obs, mb_rewards, mb_actions, mb_values, mb_dones = [], [], [], [], []
         mb_states = self.states
         for n in range(self.nsteps):
-            actions, values, states = self.model.step(self.obs, self.states, self.dones)
+            actions, values, states = self.model.step(self.obs, self.states,
+                                                      self.dones)
             mb_obs.append(np.copy(self.obs))
             mb_actions.append(actions)
             mb_values.append(values)
@@ -141,20 +164,24 @@ class Runner(object):
             mb_rewards.append(rewards)
         mb_dones.append(self.dones)
         # batch of steps to batch of rollouts
-        mb_obs = np.asarray(mb_obs, dtype=np.uint8).swapaxes(1, 0).reshape(self.batch_ob_shape)
+        mb_obs = np.asarray(
+            mb_obs, dtype=np.uint8).swapaxes(1, 0).reshape(self.batch_ob_shape)
         mb_rewards = np.asarray(mb_rewards, dtype=np.float32).swapaxes(1, 0)
         mb_actions = np.asarray(mb_actions, dtype=np.int32).swapaxes(1, 0)
         mb_values = np.asarray(mb_values, dtype=np.float32).swapaxes(1, 0)
         mb_dones = np.asarray(mb_dones, dtype=np.bool).swapaxes(1, 0)
         mb_masks = mb_dones[:, :-1]
         mb_dones = mb_dones[:, 1:]
-        last_values = self.model.value(self.obs, self.states, self.dones).tolist()
+        last_values = self.model.value(self.obs, self.states,
+                                       self.dones).tolist()
         # discount/bootstrap off value fn
-        for n, (rewards, dones, value) in enumerate(zip(mb_rewards, mb_dones, last_values)):
+        for n, (rewards, dones, value) in enumerate(
+                zip(mb_rewards, mb_dones, last_values)):
             rewards = rewards.tolist()
             dones = dones.tolist()
             if dones[-1] == 0:
-                rewards = discount_with_dones(rewards + [value], dones + [0], self.gamma)[:-1]
+                rewards = discount_with_dones(rewards + [value], dones + [0],
+                                              self.gamma)[:-1]
             else:
                 rewards = discount_with_dones(rewards, dones, self.gamma)
             mb_rewards[n] = rewards
@@ -165,9 +192,23 @@ class Runner(object):
         return mb_obs, mb_states, mb_rewards, mb_masks, mb_actions, mb_values
 
 
-def learn(policy, env, seed, total_timesteps=int(40e6), gamma=0.99, log_interval=1, nprocs=32, nsteps=20,
-          nstack=4, ent_coef=0.01, vf_coef=0.5, vf_fisher_coef=1.0, lr=0.25, max_grad_norm=0.5,
-          kfac_clip=0.001, save_interval=None, lrschedule='linear'):
+def learn(policy,
+          env,
+          seed,
+          total_timesteps=int(40e6),
+          gamma=0.99,
+          log_interval=1,
+          nprocs=32,
+          nsteps=20,
+          nstack=4,
+          ent_coef=0.01,
+          vf_coef=0.5,
+          vf_fisher_coef=1.0,
+          lr=0.25,
+          max_grad_norm=0.5,
+          kfac_clip=0.001,
+          save_interval=None,
+          lrschedule='linear'):
     tf.reset_default_graph()
     set_global_seeds(seed)
 
@@ -188,10 +229,12 @@ def learn(policy, env, seed, total_timesteps=int(40e6), gamma=0.99, log_interval
     nbatch = nenvs * nsteps
     tstart = time.time()
     coord = tf.train.Coordinator()
-    enqueue_threads = model.q_runner.create_threads(model.sess, coord=coord, start=True)
+    enqueue_threads = model.q_runner.create_threads(
+        model.sess, coord=coord, start=True)
     for update in range(1, total_timesteps // nbatch + 1):
         obs, states, rewards, masks, actions, values = runner.run()
-        policy_loss, value_loss, policy_entropy = model.train(obs, states, rewards, masks, actions, values)
+        policy_loss, value_loss, policy_entropy = model.train(
+            obs, states, rewards, masks, actions, values)
         model.old_obs = obs
         nseconds = time.time() - tstart
         fps = int((update * nbatch) / nseconds)
@@ -206,7 +249,8 @@ def learn(policy, env, seed, total_timesteps=int(40e6), gamma=0.99, log_interval
             logger.record_tabular("explained_variance", float(ev))
             logger.dump_tabular()
 
-        if save_interval and (update % save_interval == 0 or update == 1) and logger.get_dir():
+        if save_interval and (update % save_interval == 0
+                              or update == 1) and logger.get_dir():
             savepath = osp.join(logger.get_dir(), 'checkpoint%.5i' % update)
             print('Saving to', savepath)
             model.save(savepath)

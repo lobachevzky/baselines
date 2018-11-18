@@ -41,7 +41,7 @@ class RunningStat(object):
 
 
 def test_running_stat():
-    for shp in ((), (3,), (3, 4)):
+    for shp in ((), (3, ), (3, 4)):
         li = []
         rs = RunningStat(shp)
         for _ in range(5):

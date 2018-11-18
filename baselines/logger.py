@@ -36,7 +36,9 @@ class HumanOutputFormat(KVWriter, SeqWriter):
             self.file = open(filename_or_file, 'wt')
             self.own_file = True
         else:
-            assert hasattr(filename_or_file, 'read'), 'expected file or str, got %s' % filename_or_file
+            assert hasattr(
+                filename_or_file,
+                'read'), 'expected file or str, got %s' % filename_or_file
             self.file = filename_or_file
             self.own_file = False
 
@@ -45,7 +47,7 @@ class HumanOutputFormat(KVWriter, SeqWriter):
         key2str = {}
         for (key, val) in sorted(kvs.items()):
             if isinstance(val, float):
-                valstr = '%-8.3g' % (val,)
+                valstr = '%-8.3g' % (val, )
             else:
                 valstr = str(val)
             key2str[self._truncate(key)] = self._truncate(valstr)
@@ -165,7 +167,8 @@ class TensorBoardOutputFormat(KVWriter):
             kwargs = {'tag': k, 'simple_value': float(v)}
             return self.tf.Summary.Value(**kwargs)
 
-        summary = self.tf.Summary(value=[summary_val(k, v) for k, v in kvs.items()])
+        summary = self.tf.Summary(
+            value=[summary_val(k, v) for k, v in kvs.items()])
         event = self.event_pb2.Event(wall_time=time.time(), summary=summary)
         event.step = self.step  # is there any reason why you'd want to specify the step?
         self.writer.WriteEvent(event)
@@ -196,12 +199,13 @@ def make_output_format(format, ev_dir):
         assert rank == 0
         return TensorBoardOutputFormat(osp.join(ev_dir, 'tb'))
     else:
-        raise ValueError('Unknown format specified: %s' % (format,))
+        raise ValueError('Unknown format specified: %s' % (format, ))
 
 
 # ================================================================
 # API
 # ================================================================
+
 
 def logkv(key, val):
     """
@@ -274,10 +278,10 @@ def get_dir():
 record_tabular = logkv
 dump_tabular = dumpkvs
 
-
 # ================================================================
 # Backend
 # ================================================================
+
 
 class Logger(object):
     DEFAULT = None  # A logger with no output files. (See right below class definition)
@@ -326,15 +330,17 @@ class Logger(object):
                 fmt.writeseq(map(str, args))
 
 
-Logger.DEFAULT = Logger.CURRENT = Logger(dir=None, output_formats=[HumanOutputFormat(sys.stdout)])
+Logger.DEFAULT = Logger.CURRENT = Logger(
+    dir=None, output_formats=[HumanOutputFormat(sys.stdout)])
 
 
 def configure(dir=None, format_strs=None):
     if dir is None:
         dir = os.getenv('OPENAI_LOGDIR')
     if dir is None:
-        dir = osp.join(tempfile.gettempdir(),
-                       datetime.datetime.now().strftime("openai-%Y-%m-%d-%H-%M-%S-%f"))
+        dir = osp.join(
+            tempfile.gettempdir(),
+            datetime.datetime.now().strftime("openai-%Y-%m-%d-%H-%M-%S-%f"))
     assert isinstance(dir, str)
     os.makedirs(dir, exist_ok=True)
 
@@ -371,6 +377,7 @@ class scoped_configure(object):
 
 # ================================================================
 
+
 def _demo():
     info("hi")
     debug("shouldn't appear")
@@ -398,6 +405,7 @@ def _demo():
 # ================================================================
 # Readers
 # ================================================================
+
 
 def read_json(fname):
     import pandas
@@ -428,7 +436,9 @@ def read_tb(path):
     elif osp.basename(path).startswith("events."):
         fnames = [path]
     else:
-        raise NotImplementedError("Expected tensorboard file or directory containing them. Got %s" % path)
+        raise NotImplementedError(
+            "Expected tensorboard file or directory containing them. Got %s" %
+            path)
     tag2pairs = defaultdict(list)
     maxstep = 0
     for fname in fnames:

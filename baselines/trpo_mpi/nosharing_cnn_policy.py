@@ -1,8 +1,8 @@
 import gym
 import tensorflow as tf
 
-import baselines.common.tf_util as U
 from baselines.common.distributions import make_pdtype
+import baselines.common.tf_util as U
 
 
 class CnnPolicy(object):
@@ -19,7 +19,10 @@ class CnnPolicy(object):
         self.pdtype = pdtype = make_pdtype(ac_space)
         sequence_length = None
 
-        ob = U.get_placeholder(name="ob", dtype=tf.float32, shape=[sequence_length] + list(ob_space.shape))
+        ob = U.get_placeholder(
+            name="ob",
+            dtype=tf.float32,
+            shape=[sequence_length] + list(ob_space.shape))
 
         obscaled = ob / 255.0
 
@@ -29,7 +32,9 @@ class CnnPolicy(object):
             x = tf.nn.relu(U.conv2d(x, 16, "l2", [4, 4], [2, 2], pad="VALID"))
             x = U.flattenallbut0(x)
             x = tf.nn.relu(U.dense(x, 128, 'lin', U.normc_initializer(1.0)))
-            logits = U.dense(x, pdtype.param_shape()[0], "logits", U.normc_initializer(0.01))
+            logits = U.dense(x,
+                             pdtype.param_shape()[0], "logits",
+                             U.normc_initializer(0.01))
             self.pd = pdtype.pdfromflat(logits)
         with tf.variable_scope("vf"):
             x = obscaled

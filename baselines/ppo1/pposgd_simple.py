@@ -1,15 +1,15 @@
-import time
 from collections import deque
+import time
 
+from mpi4py import MPI
 import numpy as np
 import tensorflow as tf
-from mpi4py import MPI
 
-import baselines.common.tf_util as U
 from baselines import logger
 from baselines.common import Dataset, explained_variance, fmt_row, zipsame
 from baselines.common.mpi_adam import MpiAdam
 from baselines.common.mpi_moments import mpi_moments
+import baselines.common.tf_util as U
 
 
 def traj_segment_generator(pi, env, horizon, stochastic):
@@ -38,9 +38,17 @@ def traj_segment_generator(pi, env, horizon, stochastic):
         # before returning segment [0, T-1] so we get the correct
         # terminal value
         if t > 0 and t % horizon == 0:
-            yield {"ob": obs, "rew": rews, "vpred": vpreds, "new": news,
-                   "ac": acs, "prevac": prevacs, "nextvpred": vpred * (1 - new),
-                   "ep_rets": ep_rets, "ep_lens": ep_lens}
+            yield {
+                "ob": obs,
+                "rew": rews,
+                "vpred": vpreds,
+                "new": news,
+                "ac": acs,
+                "prevac": prevacs,
+                "nextvpred": vpred * (1 - new),
+                "ep_rets": ep_rets,
+                "ep_lens": ep_lens
+            }
             # Be careful!!! if you change the downstream algorithm to aggregate
             # several of these batches, then be sure to do a deepcopy
             ep_rets = []
@@ -70,7 +78,9 @@ def add_vtarg_and_adv(seg, gamma, lam):
     """
     Compute target value using TD(lambda) estimator, and advantage with GAE(lambda)
     """
-    new = np.append(seg["new"], 0)  # last element is only used for last vtarg, but we already zeroed it if last new = 1
+    new = np.append(
+        seg["new"], 0
+    )  # last element is only used for last vtarg, but we already zeroed it if last new = 1
     vpred = np.append(seg["vpred"], seg["nextvpred"])
     T = len(seg["rew"])
     seg["adv"] = gaelam = np.empty(T, 'float32')
@@ -83,27 +93,41 @@ def add_vtarg_and_adv(seg, gamma, lam):
     seg["tdlamret"] = seg["adv"] + seg["vpred"]
 
 
-def learn(env, policy_func, *,
-          timesteps_per_actorbatch,  # timesteps per actor per update
-          clip_param, entcoeff,  # clipping parameter epsilon, entropy coeff
-          optim_epochs, optim_stepsize, optim_batchsize,  # optimization hypers
-          gamma, lam,  # advantage estimation
-          max_timesteps=0, max_episodes=0, max_iters=0, max_seconds=0,  # time constraint
-          callback=None,  # you can do anything in the callback, since it takes locals(), globals()
-          adam_epsilon=1e-5,
-          schedule='constant'  # annealing for stepsize parameters (epsilon and adam)
-          ):
+def learn(
+        env,
+        policy_func,
+        *,
+        timesteps_per_actorbatch,  # timesteps per actor per update
+        clip_param,
+        entcoeff,  # clipping parameter epsilon, entropy coeff
+        optim_epochs,
+        optim_stepsize,
+        optim_batchsize,  # optimization hypers
+        gamma,
+        lam,  # advantage estimation
+        max_timesteps=0,
+        max_episodes=0,
+        max_iters=0,
+        max_seconds=0,  # time constraint
+        callback=None,  # you can do anything in the callback, since it takes locals(), globals()
+        adam_epsilon=1e-5,
+        schedule='constant'  # annealing for stepsize parameters (epsilon and adam)
+):
     # Setup losses and stuff
     # ----------------------------------------
     ob_space = env.observation_space
     ac_space = env.action_space
-    pi = policy_func("pi", ob_space, ac_space)  # Construct network for new policy
+    pi = policy_func("pi", ob_space,
+                     ac_space)  # Construct network for new policy
     oldpi = policy_func("oldpi", ob_space, ac_space)  # Network for old policy
-    atarg = tf.placeholder(dtype=tf.float32, shape=[None])  # Target advantage function (if applicable)
+    atarg = tf.placeholder(
+        dtype=tf.float32,
+        shape=[None])  # Target advantage function (if applicable)
     ret = tf.placeholder(dtype=tf.float32, shape=[None])  # Empirical return
 
-    lrmult = tf.placeholder(name='lrmult', dtype=tf.float32,
-                            shape=[])  # learning rate multiplier, updated with schedule
+    lrmult = tf.placeholder(
+        name='lrmult', dtype=tf.float32,
+        shape=[])  # learning rate multiplier, updated with schedule
     clip_param = clip_param * lrmult  # Annealed cliping parameter epislon
 
     ob = U.get_placeholder_cached(name="ob")
@@ -118,19 +142,25 @@ def learn(env, policy_func, *,
     ratio = tf.exp(pi.pd.logp(ac) - oldpi.pd.logp(ac))  # pnew / pold
     surr1 = ratio * atarg  # surrogate from conservative policy iteration
     surr2 = U.clip(ratio, 1.0 - clip_param, 1.0 + clip_param) * atarg  #
-    pol_surr = - U.mean(tf.minimum(surr1, surr2))  # PPO's pessimistic surrogate (L^CLIP)
+    pol_surr = -U.mean(tf.minimum(
+        surr1, surr2))  # PPO's pessimistic surrogate (L^CLIP)
     vf_loss = U.mean(tf.square(pi.vpred - ret))
     total_loss = pol_surr + pol_entpen + vf_loss
     losses = [pol_surr, pol_entpen, vf_loss, meankl, meanent]
     loss_names = ["pol_surr", "pol_entpen", "vf_loss", "kl", "ent"]
 
     var_list = pi.get_trainable_variables()
-    lossandgrad = U.function([ob, ac, atarg, ret, lrmult], losses + [U.flatgrad(total_loss, var_list)])
+    lossandgrad = U.function([ob, ac, atarg, ret, lrmult],
+                             losses + [U.flatgrad(total_loss, var_list)])
     adam = MpiAdam(var_list, epsilon=adam_epsilon)
 
-    assign_old_eq_new = U.function([], [], updates=[tf.assign(oldv, newv)
-                                                    for (oldv, newv) in
-                                                    zipsame(oldpi.get_variables(), pi.get_variables())])
+    assign_old_eq_new = U.function(
+        [], [],
+        updates=[
+            tf.assign(oldv, newv)
+            for (oldv,
+                 newv) in zipsame(oldpi.get_variables(), pi.get_variables())
+        ])
     compute_losses = U.function([ob, ac, atarg, ret, lrmult], losses)
 
     U.initialize()
@@ -138,7 +168,8 @@ def learn(env, policy_func, *,
 
     # Prepare for rollouts
     # ----------------------------------------
-    seg_gen = traj_segment_generator(pi, env, timesteps_per_actorbatch, stochastic=True)
+    seg_gen = traj_segment_generator(
+        pi, env, timesteps_per_actorbatch, stochastic=True)
 
     episodes_so_far = 0
     timesteps_so_far = 0
@@ -147,8 +178,9 @@ def learn(env, policy_func, *,
     lenbuffer = deque(maxlen=100)  # rolling buffer for episode lengths
     rewbuffer = deque(maxlen=100)  # rolling buffer for episode rewards
 
-    assert sum([max_iters > 0, max_timesteps > 0, max_episodes > 0,
-                max_seconds > 0]) == 1, "Only one time constraint permitted"
+    assert sum(
+        [max_iters > 0, max_timesteps > 0, max_episodes > 0,
+         max_seconds > 0]) == 1, "Only one time constraint permitted"
 
     while True:
         if callback: callback(locals(), globals())
@@ -174,22 +206,30 @@ def learn(env, policy_func, *,
         add_vtarg_and_adv(seg, gamma, lam)
 
         # ob, ac, atarg, ret, td1ret = map(np.concatenate, (obs, acs, atargs, rets, td1rets))
-        ob, ac, atarg, tdlamret = seg["ob"], seg["ac"], seg["adv"], seg["tdlamret"]
+        ob, ac, atarg, tdlamret = seg["ob"], seg["ac"], seg["adv"], seg[
+            "tdlamret"]
         vpredbefore = seg["vpred"]  # predicted value function before udpate
-        atarg = (atarg - atarg.mean()) / atarg.std()  # standardized advantage function estimate
-        d = Dataset(dict(ob=ob, ac=ac, atarg=atarg, vtarg=tdlamret), shuffle=not pi.recurrent)
+        atarg = (atarg - atarg.mean()
+                 ) / atarg.std()  # standardized advantage function estimate
+        d = Dataset(
+            dict(ob=ob, ac=ac, atarg=atarg, vtarg=tdlamret),
+            shuffle=not pi.recurrent)
         optim_batchsize = optim_batchsize or ob.shape[0]
 
-        if hasattr(pi, "ob_rms"): pi.ob_rms.update(ob)  # update running mean/std for policy
+        if hasattr(pi, "ob_rms"):
+            pi.ob_rms.update(ob)  # update running mean/std for policy
 
         assign_old_eq_new()  # set old parameter values to new parameter values
         logger.log("Optimizing...")
         logger.log(fmt_row(13, loss_names))
         # Here we do a bunch of optimization epochs over the data
         for _ in range(optim_epochs):
-            losses = []  # list of tuples, each of which gives the loss for a minibatch
+            losses = [
+            ]  # list of tuples, each of which gives the loss for a minibatch
             for batch in d.iterate_once(optim_batchsize):
-                *newlosses, g = lossandgrad(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+                *newlosses, g = lossandgrad(batch["ob"], batch["ac"],
+                                            batch["atarg"], batch["vtarg"],
+                                            cur_lrmult)
                 adam.update(g, optim_stepsize * cur_lrmult)
                 losses.append(newlosses)
             logger.log(fmt_row(13, np.mean(losses, axis=0)))
@@ -197,13 +237,16 @@ def learn(env, policy_func, *,
         logger.log("Evaluating losses...")
         losses = []
         for batch in d.iterate_once(optim_batchsize):
-            newlosses = compute_losses(batch["ob"], batch["ac"], batch["atarg"], batch["vtarg"], cur_lrmult)
+            newlosses = compute_losses(batch["ob"], batch["ac"],
+                                       batch["atarg"], batch["vtarg"],
+                                       cur_lrmult)
             losses.append(newlosses)
         meanlosses, _, _ = mpi_moments(losses, axis=0)
         logger.log(fmt_row(13, meanlosses))
         for (lossval, name) in zipsame(meanlosses, loss_names):
             logger.record_tabular("loss_" + name, lossval)
-        logger.record_tabular("ev_tdlam_before", explained_variance(vpredbefore, tdlamret))
+        logger.record_tabular("ev_tdlam_before",
+                              explained_variance(vpredbefore, tdlamret))
         lrlocal = (seg["ep_lens"], seg["ep_rets"])  # local values
         listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal)  # list of tuples
         lens, rews = map(flatten_lists, zip(*listoflrpairs))

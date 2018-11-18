@@ -2,8 +2,8 @@ from collections import deque
 
 import cv2
 import gym
-import numpy as np
 from gym import spaces
+import numpy as np
 
 
 class NoopResetEnv(gym.Wrapper):
@@ -93,7 +93,8 @@ class MaxAndSkipEnv(gym.Wrapper):
         """Return only every `skip`-th frame"""
         gym.Wrapper.__init__(self, env)
         # most recent raw observations (for max pooling across time steps)
-        self._obs_buffer = np.zeros((2,) + env.observation_space.shape, dtype='uint8')
+        self._obs_buffer = np.zeros(
+            (2, ) + env.observation_space.shape, dtype='uint8')
         self._skip = skip
 
     def _step(self, action):
@@ -126,11 +127,13 @@ class WarpFrame(gym.ObservationWrapper):
         gym.ObservationWrapper.__init__(self, env)
         self.width = 84
         self.height = 84
-        self.observation_space = spaces.Box(low=0, high=255, shape=(self.height, self.width, 1))
+        self.observation_space = spaces.Box(
+            low=0, high=255, shape=(self.height, self.width, 1))
 
     def _observation(self, frame):
         frame = cv2.cvtColor(frame, cv2.COLOR_RGB2GRAY)
-        frame = cv2.resize(frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
+        frame = cv2.resize(
+            frame, (self.width, self.height), interpolation=cv2.INTER_AREA)
         return frame[:, :, None]
 
 
@@ -148,7 +151,8 @@ class FrameStack(gym.Wrapper):
         self.k = k
         self.frames = deque([], maxlen=k)
         shp = env.observation_space.shape
-        self.observation_space = spaces.Box(low=0, high=255, shape=(shp[0], shp[1], shp[2] * k))
+        self.observation_space = spaces.Box(
+            low=0, high=255, shape=(shp[0], shp[1], shp[2] * k))
 
     def _reset(self):
         ob = self.env.reset()
@@ -199,7 +203,11 @@ def make_atari(env_id):
     return env
 
 
-def wrap_deepmind(env, episode_life=True, clip_rewards=True, frame_stack=False, scale=False):
+def wrap_deepmind(env,
+                  episode_life=True,
+                  clip_rewards=True,
+                  frame_stack=False,
+                  scale=False):
     """Configure environment for DeepMind-style Atari.
     """
     if episode_life:

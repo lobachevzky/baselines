@@ -6,7 +6,7 @@ class RingBuffer(object):
         self.maxlen = maxlen
         self.start = 0
         self.length = 0
-        self.data = np.zeros((maxlen,) + shape).astype(dtype)
+        self.data = np.zeros((maxlen, ) + shape).astype(dtype)
 
     def __len__(self):
         return self.length
@@ -45,13 +45,14 @@ class Memory(object):
 
         self.observations0 = RingBuffer(limit, shape=observation_shape)
         self.actions = RingBuffer(limit, shape=action_shape)
-        self.rewards = RingBuffer(limit, shape=(1,))
-        self.terminals1 = RingBuffer(limit, shape=(1,))
+        self.rewards = RingBuffer(limit, shape=(1, ))
+        self.terminals1 = RingBuffer(limit, shape=(1, ))
         self.observations1 = RingBuffer(limit, shape=observation_shape)
 
     def sample(self, batch_size):
         # Draw such that we always have a proceeding element.
-        batch_idxs = np.random.random_integers(self.nb_entries - 2, size=batch_size)
+        batch_idxs = np.random.random_integers(
+            self.nb_entries - 2, size=batch_size)
 
         obs0_batch = self.observations0.get_batch(batch_idxs)
         obs1_batch = self.observations1.get_batch(batch_idxs)

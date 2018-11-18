@@ -1,5 +1,7 @@
 import os
+from shutil import unpack_archive
 import tempfile
+from threading import Event
 import zipfile
 
 from azure.common import AzureMissingResourceHttpError
@@ -8,11 +10,9 @@ try:
     from azure.storage.blob import BlobService
 except ImportError:
     from azure.storage.blob import BlockBlobService as BlobService
-from shutil import unpack_archive
-from threading import Event
-
 
 # TODOS: use Azure snapshots instead of hacky backups
+
 
 def fixed_list_blobs(service, *args, **kwargs):
     """By defualt list_containers only returns a subset of results.
@@ -48,14 +48,20 @@ def make_archive(source_path, dest_path):
 class Container(object):
     services = {}
 
-    def __init__(self, account_name, account_key, container_name, maybe_create=False):
+    def __init__(self,
+                 account_name,
+                 account_key,
+                 container_name,
+                 maybe_create=False):
         self._account_name = account_name
         self._container_name = container_name
         if account_name not in Container.services:
-            Container.services[account_name] = BlobService(account_name, account_key)
+            Container.services[account_name] = BlobService(
+                account_name, account_key)
         self._service = Container.services[account_name]
         if maybe_create:
-            self._service.create_container(self._container_name, fail_on_exist=False)
+            self._service.create_container(
+                self._container_name, fail_on_exist=False)
 
     def put(self, source_path, blob_name, callback=None):
         """Upload a file or directory from `source_path` to azure blob `blob_name`.
@@ -73,15 +79,11 @@ class Container(object):
         # Attempt to make backup if an existing version is already available
         try:
             x_ms_copy_source = "https://{}.blob.core.windows.net/{}/{}".format(
-                self._account_name,
-                self._container_name,
-                blob_name
-            )
+                self._account_name, self._container_name, blob_name)
             self._service.copy_blob(
                 container_name=self._container_name,
                 blob_name=blob_name + ".backup",
-                x_ms_copy_source=x_ms_copy_source
-            )
+                x_ms_copy_source=x_ms_copy_source)
         except AzureMissingResourceHttpError:
             pass
 
@@ -118,8 +120,7 @@ class Container(object):
                 try:
                     properties = self._service.get_blob_properties(
                         blob_name=backup_blob_name,
-                        container_name=self._container_name
-                    )
+                        container_name=self._container_name)
                     if hasattr(properties, 'properties'):
                         # Annoyingly, Azure has changed the API and this now returns a blob
                         # instead of it's properties with up-to-date azure package.
@@ -142,15 +143,14 @@ class Container(object):
 
     def list(self, prefix=None):
         """List all blobs in the container."""
-        return fixed_list_blobs(self._service, self._container_name, prefix=prefix)
+        return fixed_list_blobs(
+            self._service, self._container_name, prefix=prefix)
 
     def exists(self, blob_name):
         """Returns true if `blob_name` exists in container."""
         try:
             self._service.get_blob_properties(
-                blob_name=blob_name,
-                container_name=self._container_name
-            )
+                blob_name=blob_name, container_name=self._container_name)
             return True
         except AzureMissingResourceHttpError:
             return False

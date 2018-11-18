@@ -1,10 +1,10 @@
 #!/usr/bin/env python
-import gym
 import logging
 import os
 
-from baselines import bench
-from baselines import logger
+import gym
+
+from baselines import bench, logger
 from baselines.acer.acer_simple import learn
 from baselines.acer.policies import AcerCnnPolicy, AcerLstmPolicy
 from baselines.common import set_global_seeds
@@ -17,7 +17,9 @@ def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu):
         def _thunk():
             env = make_atari(env_id)
             env.seed(seed + rank)
-            env = bench.Monitor(env, logger.get_dir() and os.path.join(logger.get_dir(), str(rank)))
+            env = bench.Monitor(
+                env,
+                logger.get_dir() and os.path.join(logger.get_dir(), str(rank)))
             gym.logger.setLevel(logging.WARN)
             return wrap_deepmind(env)
 
@@ -32,24 +34,44 @@ def train(env_id, num_timesteps, seed, policy, lrschedule, num_cpu):
     else:
         print("Policy {} not implemented".format(policy))
         return
-    learn(policy_fn, env, seed, total_timesteps=int(num_timesteps * 1.1), lrschedule=lrschedule)
+    learn(
+        policy_fn,
+        env,
+        seed,
+        total_timesteps=int(num_timesteps * 1.1),
+        lrschedule=lrschedule)
     env.close()
 
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--env', help='environment ID', default='BreakoutNoFrameskip-v4')
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '--env', help='environment ID', default='BreakoutNoFrameskip-v4')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
-    parser.add_argument('--policy', help='Policy architecture', choices=['cnn', 'lstm', 'lnlstm'], default='cnn')
-    parser.add_argument('--lrschedule', help='Learning rate schedule', choices=['constant', 'linear'],
-                        default='constant')
-    parser.add_argument('--logdir', help='Directory for logging', default='./log')
+    parser.add_argument(
+        '--policy',
+        help='Policy architecture',
+        choices=['cnn', 'lstm', 'lnlstm'],
+        default='cnn')
+    parser.add_argument(
+        '--lrschedule',
+        help='Learning rate schedule',
+        choices=['constant', 'linear'],
+        default='constant')
+    parser.add_argument(
+        '--logdir', help='Directory for logging', default='./log')
     parser.add_argument('--num-timesteps', type=int, default=int(10e6))
     args = parser.parse_args()
     logger.configure(os.path.abspath(args.logdir))
-    train(args.env, num_timesteps=args.num_timesteps, seed=args.seed,
-          policy=args.policy, lrschedule=args.lrschedule, num_cpu=16)
+    train(
+        args.env,
+        num_timesteps=args.num_timesteps,
+        seed=args.seed,
+        policy=args.policy,
+        lrschedule=args.lrschedule,
+        num_cpu=16)
 
 
 if __name__ == '__main__':

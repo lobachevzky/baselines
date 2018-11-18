@@ -1,5 +1,5 @@
-import numpy as np
 from gym import spaces
+import numpy as np
 
 from baselines.common.vec_env import VecEnv
 
@@ -16,7 +16,8 @@ class VecFrameStack(VecEnv):
         if isinstance(wos, spaces.Box):
             low = np.repeat(wos.low, self.nstack, axis=-1)
             high = np.repeat(wos.high, self.nstack, axis=-1)
-            self.stackedobs = np.zeros((venv.num_envs,) + low.shape, low.dtype)
+            self.stackedobs = np.zeros((venv.num_envs, ) + low.shape,
+                                       low.dtype)
             self._observation_space = spaces.Box(low=low, high=high)
         elif isinstance(wos, spaces.Discrete):
             self._observation_space = spaces.Discrete(wos.n * self.nstack)

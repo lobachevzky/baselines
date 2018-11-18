@@ -2,29 +2,44 @@ import argparse
 import os
 
 import gym
-import numpy as np
-from baselines.common.atari_wrappers_deprecated import wrap_dqn
 from gym.monitoring import VideoRecorder
+import numpy as np
 
+from baselines import bench, deepq
+from baselines.common.atari_wrappers_deprecated import wrap_dqn
+from baselines.common.misc_util import boolean_flag
 import baselines.common.tf_util as U
-from baselines import bench
-from baselines import deepq
-from baselines.common.misc_util import (
-    boolean_flag,
-)
-from baselines.deepq.experiments.atari.model import model, dueling_model
+from baselines.deepq.experiments.atari.model import dueling_model, model
 
 
 def parse_args():
     parser = argparse.ArgumentParser("Run an already learned DQN model.")
     # Environment
-    parser.add_argument("--env", type=str, required=True, help="name of the game")
-    parser.add_argument("--model-dir", type=str, default=None, help="load model from this directory. ")
-    parser.add_argument("--video", type=str, default=None,
-                        help="Path to mp4 file where the video of first episode will be recorded.")
-    boolean_flag(parser, "stochastic", default=True,
-                 help="whether or not to use stochastic actions according to models eps value")
-    boolean_flag(parser, "dueling", default=False, help="whether or not to use dueling model")
+    parser.add_argument(
+        "--env", type=str, required=True, help="name of the game")
+    parser.add_argument(
+        "--model-dir",
+        type=str,
+        default=None,
+        help="load model from this directory. ")
+    parser.add_argument(
+        "--video",
+        type=str,
+        default=None,
+        help=
+        "Path to mp4 file where the video of first episode will be recorded.")
+    boolean_flag(
+        parser,
+        "stochastic",
+        default=True,
+        help=
+        "whether or not to use stochastic actions according to models eps value"
+    )
+    boolean_flag(
+        parser,
+        "dueling",
+        default=False,
+        help="whether or not to use dueling model")
 
     return parser.parse_args()
 
@@ -64,7 +79,8 @@ if __name__ == '__main__':
         args = parse_args()
         env = make_env(args.env)
         act = deepq.build_act(
-            make_obs_ph=lambda name: U.Uint8Input(env.observation_space.shape, name=name),
+            make_obs_ph=
+            lambda name: U.Uint8Input(env.observation_space.shape, name=name),
             q_func=dueling_model if args.dueling else model,
             num_actions=env.action_space.n)
         U.load_state(os.path.join(args.model_dir, "saved"))

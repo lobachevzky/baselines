@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
+import logging
 import os.path as osp
 
 import gym
-import logging
 from mpi4py import MPI
 
-from baselines import bench
-from baselines import logger
+from baselines import bench, logger
 from baselines.common import set_global_seeds
 from baselines.common.atari_wrappers import make_atari, wrap_deepmind
 
@@ -28,25 +27,42 @@ def train(env_id, num_timesteps, seed):
     env = make_atari(env_id)
 
     def policy_fn(name, ob_space, ac_space):  # pylint: disable=W0613
-        return CnnPolicy(name=name, ob_space=env.observation_space, ac_space=env.action_space)
+        return CnnPolicy(
+            name=name,
+            ob_space=env.observation_space,
+            ac_space=env.action_space)
 
-    env = bench.Monitor(env, logger.get_dir() and osp.join(logger.get_dir(), str(rank)))
+    env = bench.Monitor(
+        env,
+        logger.get_dir() and osp.join(logger.get_dir(), str(rank)))
     env.seed(workerseed)
     gym.logger.setLevel(logging.WARN)
 
     env = wrap_deepmind(env)
     env.seed(workerseed)
 
-    trpo_mpi.learn(env, policy_fn, timesteps_per_batch=512, max_kl=0.001, cg_iters=10, cg_damping=1e-3,
-                   max_timesteps=int(num_timesteps * 1.1), gamma=0.98, lam=1.0, vf_iters=3, vf_stepsize=1e-4,
-                   entcoeff=0.00)
+    trpo_mpi.learn(
+        env,
+        policy_fn,
+        timesteps_per_batch=512,
+        max_kl=0.001,
+        cg_iters=10,
+        cg_damping=1e-3,
+        max_timesteps=int(num_timesteps * 1.1),
+        gamma=0.98,
+        lam=1.0,
+        vf_iters=3,
+        vf_stepsize=1e-4,
+        entcoeff=0.00)
     env.close()
 
 
 def main():
     import argparse
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--env', help='environment ID', default='PongNoFrameskip-v4')
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '--env', help='environment ID', default='PongNoFrameskip-v4')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
     parser.add_argument('--num-timesteps', type=int, default=int(10e6))
     args = parser.parse_args()

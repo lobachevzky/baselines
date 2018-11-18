@@ -1,8 +1,8 @@
 import gym
 import tensorflow as tf
 
-import baselines.common.tf_util as U
 from baselines.common.distributions import make_pdtype
+import baselines.common.tf_util as U
 
 
 class CnnPolicy(object):
@@ -19,7 +19,10 @@ class CnnPolicy(object):
         self.pdtype = pdtype = make_pdtype(ac_space)
         sequence_length = None
 
-        ob = U.get_placeholder(name="ob", dtype=tf.float32, shape=[sequence_length] + list(ob_space.shape))
+        ob = U.get_placeholder(
+            name="ob",
+            dtype=tf.float32,
+            shape=[sequence_length] + list(ob_space.shape))
 
         x = ob / 255.0
         if kind == 'small':  # from A3C paper
@@ -36,7 +39,9 @@ class CnnPolicy(object):
         else:
             raise NotImplementedError
 
-        logits = U.dense(x, pdtype.param_shape()[0], "logits", U.normc_initializer(0.01))
+        logits = U.dense(x,
+                         pdtype.param_shape()[0], "logits",
+                         U.normc_initializer(0.01))
         self.pd = pdtype.pdfromflat(logits)
         self.vpred = U.dense(x, 1, "value", U.normc_initializer(1.0))[:, 0]
 

@@ -72,7 +72,7 @@ class AddClock(Filter):
         return np.append(x, self.count / 100.0)
 
     def output_shape(self, input_space):
-        return (input_space.shape[0] + 1,)
+        return (input_space.shape[0] + 1, )
 
 
 class FlattenFilter(Filter):
@@ -80,7 +80,7 @@ class FlattenFilter(Filter):
         return x.ravel()
 
     def output_shape(self, input_space):
-        return (int(np.prod(input_space.shape)),)
+        return (int(np.prod(input_space.shape)), )
 
 
 class Ind2OneHotFilter(Filter):
@@ -93,7 +93,7 @@ class Ind2OneHotFilter(Filter):
         return out
 
     def output_shape(self, input_space):
-        return (input_space.n,)
+        return (input_space.n, )
 
 
 class DivFilter(Filter):
@@ -121,4 +121,5 @@ class StackFilter(Filter):
         return np.concatenate(self.stack, axis=-1)
 
     def output_shape(self, input_space):
-        return input_space.shape[:-1] + (input_space.shape[-1] * self.stack.maxlen,)
+        return input_space.shape[:-1] + (
+            input_space.shape[-1] * self.stack.maxlen, )

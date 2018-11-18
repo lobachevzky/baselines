@@ -1,10 +1,10 @@
 __all__ = ['Monitor', 'get_monitor_files', 'load_results']
 
 import csv
+from glob import glob
 import json
 import os.path as osp
 import time
-from glob import glob
 
 import gym
 from gym.core import Wrapper
@@ -14,7 +14,11 @@ class Monitor(Wrapper):
     EXT = "monitor.csv"
     f = None
 
-    def __init__(self, env, filename, allow_early_resets=False, reset_keywords=()):
+    def __init__(self,
+                 env,
+                 filename,
+                 allow_early_resets=False,
+                 reset_keywords=()):
         Wrapper.__init__(self, env=env)
         self.tstart = time.time()
         if filename is None:
@@ -27,9 +31,14 @@ class Monitor(Wrapper):
                 else:
                     filename = filename + "." + Monitor.EXT
             self.f = open(filename, "wt")
-            self.f.write('#%s\n' % json.dumps({"t_start": self.tstart, "gym_version": gym.__version__,
-                                               "env_id": env.spec.id if env.spec else 'Unknown'}))
-            self.logger = csv.DictWriter(self.f, fieldnames=('r', 'l', 't') + reset_keywords)
+            self.f.write('#%s\n' % json.dumps(
+                {
+                    "t_start": self.tstart,
+                    "gym_version": gym.__version__,
+                    "env_id": env.spec.id if env.spec else 'Unknown'
+                }))
+            self.logger = csv.DictWriter(
+                self.f, fieldnames=('r', 'l', 't') + reset_keywords)
             self.logger.writeheader()
 
         self.reset_keywords = reset_keywords
@@ -39,18 +48,21 @@ class Monitor(Wrapper):
         self.episode_rewards = []
         self.episode_lengths = []
         self.total_steps = 0
-        self.current_reset_info = {}  # extra info about the current episode, that was passed in during reset()
+        self.current_reset_info = {
+        }  # extra info about the current episode, that was passed in during reset()
 
     def _reset(self, **kwargs):
         if not self.allow_early_resets and not self.needs_reset:
             raise RuntimeError(
-                "Tried to reset an environment before done. If you want to allow early resets, wrap your env with Monitor(env, path, allow_early_resets=True)")
+                "Tried to reset an environment before done. If you want to allow early resets, wrap your env with Monitor(env, path, allow_early_resets=True)"
+            )
         self.rewards = []
         self.needs_reset = False
         for k in self.reset_keywords:
             v = kwargs.get(k)
             if v is None:
-                raise ValueError('Expected you to pass kwarg %s into reset' % k)
+                raise ValueError(
+                    'Expected you to pass kwarg %s into reset' % k)
             self.current_reset_info[k] = v
         return self.env.reset(**kwargs)
 
@@ -63,7 +75,11 @@ class Monitor(Wrapper):
             self.needs_reset = True
             eprew = sum(self.rewards)
             eplen = len(self.rewards)
-            epinfo = {"r": round(eprew, 6), "l": eplen, "t": round(time.time() - self.tstart, 6)}
+            epinfo = {
+                "r": round(eprew, 6),
+                "l": eplen,
+                "t": round(time.time() - self.tstart, 6)
+            }
             epinfo.update(self.current_reset_info)
             if self.logger:
                 self.logger.writerow(epinfo)
@@ -98,9 +114,12 @@ def get_monitor_files(dir):
 
 def load_results(dir):
     import pandas
-    monitor_files = glob(osp.join(dir, "*monitor.*"))  # get both csv and (old) json files
+    monitor_files = glob(osp.join(
+        dir, "*monitor.*"))  # get both csv and (old) json files
     if not monitor_files:
-        raise LoadMonitorResultsError("no monitor files of the form *%s found in %s" % (Monitor.EXT, dir))
+        raise LoadMonitorResultsError(
+            "no monitor files of the form *%s found in %s" % (Monitor.EXT,
+                                                              dir))
     dfs = []
     headers = []
     for fname in monitor_files:

@@ -1,6 +1,6 @@
+from mpi4py import MPI
 import numpy as np
 import tensorflow as tf
-from mpi4py import MPI
 
 from baselines.common.mpi_moments import mpi_moments
 

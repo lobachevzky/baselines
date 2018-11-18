@@ -1,12 +1,19 @@
+from mpi4py import MPI
 import numpy as np
 import tensorflow as tf
-from mpi4py import MPI
 
 import baselines.common.tf_util as U
 
 
 class MpiAdam(object):
-    def __init__(self, var_list, *, beta1=0.9, beta2=0.999, epsilon=1e-08, scale_grad_by_procs=True, comm=None):
+    def __init__(self,
+                 var_list,
+                 *,
+                 beta1=0.9,
+                 beta2=0.999,
+                 epsilon=1e-08,
+                 scale_grad_by_procs=True,
+                 comm=None):
         self.var_list = var_list
         self.beta1 = beta1
         self.beta2 = beta2
@@ -30,10 +37,11 @@ class MpiAdam(object):
             globalg /= self.comm.Get_size()
 
         self.t += 1
-        a = stepsize * np.sqrt(1 - self.beta2 ** self.t) / (1 - self.beta1 ** self.t)
+        a = stepsize * np.sqrt(1 - self.beta2**self.t) / (
+            1 - self.beta1**self.t)
         self.m = self.beta1 * self.m + (1 - self.beta1) * globalg
         self.v = self.beta2 * self.v + (1 - self.beta2) * (globalg * globalg)
-        step = (- a) * self.m / (np.sqrt(self.v) + self.epsilon)
+        step = (-a) * self.m / (np.sqrt(self.v) + self.epsilon)
         self.setfromflat(self.getflat() + step)
 
     def sync(self):
@@ -73,7 +81,8 @@ def test_MpiAdam():
     tf.get_default_session().run(tf.global_variables_initializer())
 
     var_list = [a, b]
-    lossandgrad = U.function([], [loss, U.flatgrad(loss, var_list)], updates=[update_op])
+    lossandgrad = U.function([], [loss, U.flatgrad(loss, var_list)],
+                             updates=[update_op])
     adam = MpiAdam(var_list)
 
     for i in range(10):

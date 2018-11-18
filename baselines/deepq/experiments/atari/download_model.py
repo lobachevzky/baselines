@@ -8,23 +8,38 @@ from baselines.common.azure_utils import Container
 def parse_args():
     parser = argparse.ArgumentParser("Download a pretrained model from Azure.")
     # Environment
-    parser.add_argument("--model-dir", type=str, default=None,
-                        help="save model in this directory this directory. ")
-    parser.add_argument("--account-name", type=str, default="openaisciszymon",
-                        help="account name for Azure Blob Storage")
-    parser.add_argument("--account-key", type=str, default=None,
-                        help="account key for Azure Blob Storage")
-    parser.add_argument("--container", type=str, default="dqn-blogpost",
-                        help="container name and blob name separated by colon serparated by colon")
-    parser.add_argument("--blob", type=str, default=None, help="blob with the model")
+    parser.add_argument(
+        "--model-dir",
+        type=str,
+        default=None,
+        help="save model in this directory this directory. ")
+    parser.add_argument(
+        "--account-name",
+        type=str,
+        default="openaisciszymon",
+        help="account name for Azure Blob Storage")
+    parser.add_argument(
+        "--account-key",
+        type=str,
+        default=None,
+        help="account key for Azure Blob Storage")
+    parser.add_argument(
+        "--container",
+        type=str,
+        default="dqn-blogpost",
+        help=
+        "container name and blob name separated by colon serparated by colon")
+    parser.add_argument(
+        "--blob", type=str, default=None, help="blob with the model")
     return parser.parse_args()
 
 
 def main():
     args = parse_args()
-    c = Container(account_name=args.account_name,
-                  account_key=args.account_key,
-                  container_name=args.container)
+    c = Container(
+        account_name=args.account_name,
+        account_key=args.account_key,
+        container_name=args.container)
 
     if args.blob is None:
         print("Listing available models:")

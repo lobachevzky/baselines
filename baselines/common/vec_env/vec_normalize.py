@@ -9,11 +9,19 @@ class VecNormalize(VecEnv):
     Vectorized environment base class
     """
 
-    def __init__(self, venv, ob=True, ret=True, clipob=10., cliprew=10., gamma=0.99, epsilon=1e-8):
+    def __init__(self,
+                 venv,
+                 ob=True,
+                 ret=True,
+                 clipob=10.,
+                 cliprew=10.,
+                 gamma=0.99,
+                 epsilon=1e-8):
         self.venv = venv
         self._observation_space = self.venv.observation_space
         self._action_space = venv.action_space
-        self.ob_rms = RunningMeanStd(shape=self._observation_space.shape) if ob else None
+        self.ob_rms = RunningMeanStd(
+            shape=self._observation_space.shape) if ob else None
         self.ret_rms = RunningMeanStd(shape=()) if ret else None
         self.clipob = clipob
         self.cliprew = cliprew
@@ -33,13 +41,16 @@ class VecNormalize(VecEnv):
         obs = self._obfilt(obs)
         if self.ret_rms:
             self.ret_rms.update(self.ret)
-            rews = np.clip(rews / np.sqrt(self.ret_rms.var + self.epsilon), -self.cliprew, self.cliprew)
+            rews = np.clip(rews / np.sqrt(self.ret_rms.var + self.epsilon),
+                           -self.cliprew, self.cliprew)
         return obs, rews, news, infos
 
     def _obfilt(self, obs):
         if self.ob_rms:
             self.ob_rms.update(obs)
-            obs = np.clip((obs - self.ob_rms.mean) / np.sqrt(self.ob_rms.var + self.epsilon), -self.clipob, self.clipob)
+            obs = np.clip((obs - self.ob_rms.mean) /
+                          np.sqrt(self.ob_rms.var + self.epsilon),
+                          -self.clipob, self.clipob)
             return obs
         else:
             return obs
@@ -85,7 +96,8 @@ class RunningMeanStd(object):
         new_mean = self.mean + delta * batch_count / tot_count
         m_a = self.var * (self.count)
         m_b = batch_var * (batch_count)
-        M2 = m_a + m_b + np.square(delta) * self.count * batch_count / (self.count + batch_count)
+        M2 = m_a + m_b + np.square(delta) * self.count * batch_count / (
+            self.count + batch_count)
         new_var = M2 / (self.count + batch_count)
 
         new_count = batch_count + self.count

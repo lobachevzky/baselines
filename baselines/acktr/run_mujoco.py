@@ -6,8 +6,7 @@ import os
 import gym
 import tensorflow as tf
 
-from baselines import bench
-from baselines import logger
+from baselines import bench, logger
 from baselines.acktr.acktr_cont import learn
 from baselines.acktr.policies import GaussianMlpPolicy
 from baselines.acktr.value_functions import NeuralNetValueFunction
@@ -16,7 +15,9 @@ from baselines.common import set_global_seeds
 
 def train(env_id, num_timesteps, seed):
     env = gym.make(env_id)
-    env = bench.Monitor(env, logger.get_dir() and os.path.join(logger.get_dir(), str(rank)))
+    env = bench.Monitor(
+        env,
+        logger.get_dir() and os.path.join(logger.get_dir(), str(rank)))
     set_global_seeds(seed)
     env.seed(seed)
     gym.logger.setLevel(logging.WARN)
@@ -29,10 +30,16 @@ def train(env_id, num_timesteps, seed):
         with tf.variable_scope("pi"):
             policy = GaussianMlpPolicy(ob_dim, ac_dim)
 
-        learn(env, policy=policy, vf=vf,
-              gamma=0.99, lam=0.97, timesteps_per_batch=2500,
-              desired_kl=0.002,
-              num_timesteps=num_timesteps, animate=False)
+        learn(
+            env,
+            policy=policy,
+            vf=vf,
+            gamma=0.99,
+            lam=0.97,
+            timesteps_per_batch=2500,
+            desired_kl=0.002,
+            num_timesteps=num_timesteps,
+            animate=False)
 
         env.close()
 
@@ -40,7 +47,8 @@ def train(env_id, num_timesteps, seed):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run Mujoco benchmark.')
     parser.add_argument('--seed', help='RNG seed', type=int, default=0)
-    parser.add_argument('--env', help='environment ID', type=str, default="Reacher-v1")
+    parser.add_argument(
+        '--env', help='environment ID', type=str, default="Reacher-v1")
     parser.add_argument('--num-timesteps', type=int, default=int(1e6))
     args = parser.parse_args()
     logger.configure()

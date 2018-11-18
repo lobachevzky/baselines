@@ -30,7 +30,7 @@ class Pd(object):
         raise NotImplementedError
 
     def logp(self, x):
-        return - self.neglogp(x)
+        return -self.neglogp(x)
 
 
 class PdType(object):
@@ -54,10 +54,16 @@ class PdType(object):
         raise NotImplementedError
 
     def param_placeholder(self, prepend_shape, name=None):
-        return tf.placeholder(dtype=tf.float32, shape=prepend_shape + self.param_shape(), name=name)
+        return tf.placeholder(
+            dtype=tf.float32,
+            shape=prepend_shape + self.param_shape(),
+            name=name)
 
     def sample_placeholder(self, prepend_shape, name=None):
-        return tf.placeholder(dtype=self.sample_dtype(), shape=prepend_shape + self.sample_shape(), name=name)
+        return tf.placeholder(
+            dtype=self.sample_dtype(),
+            shape=prepend_shape + self.sample_shape(),
+            name=name)
 
 
 class CategoricalPdType(PdType):
@@ -156,6 +162,7 @@ class BernoulliPdType(PdType):
 #         u = tf.random_uniform(tf.shape(self.logits))
 #         return U.argmax(self.logits - tf.log(-tf.log(u)), axis=-1)
 
+
 class CategoricalPd(Pd):
     def __init__(self, logits):
         self.logits = logits
@@ -172,8 +179,7 @@ class CategoricalPd(Pd):
         #       the implementation does not allow second-order derivatives...
         one_hot_actions = tf.one_hot(x, self.logits.get_shape().as_list()[-1])
         return tf.nn.softmax_cross_entropy_with_logits_v2(
-            logits=self.logits,
-            labels=one_hot_actions)
+            logits=self.logits, labels=one_hot_actions)
 
     def kl(self, other):
         a0 = self.logits - U.max(self.logits, axis=-1, keepdims=True)
@@ -205,28 +211,36 @@ class MultiCategoricalPd(Pd):
     def __init__(self, low, high, flat):
         self.flat = flat
         self.low = tf.constant(low, dtype=tf.int32)
-        self.categoricals = list(map(CategoricalPd, tf.split(flat, high - low + 1, axis=len(flat.get_shape()) - 1)))
+        self.categoricals = list(
+            map(CategoricalPd,
+                tf.split(flat, high - low + 1,
+                         axis=len(flat.get_shape()) - 1)))
 
     def flatparam(self):
         return self.flat
 
     def mode(self):
-        return self.low + tf.cast(tf.stack([p.mode() for p in self.categoricals], axis=-1), tf.int32)
+        return self.low + tf.cast(
+            tf.stack([p.mode() for p in self.categoricals], axis=-1), tf.int32)
 
     def neglogp(self, x):
-        return tf.add_n(
-            [p.neglogp(px) for p, px in zip(self.categoricals, tf.unstack(x - self.low, axis=len(x.get_shape()) - 1))])
+        return tf.add_n([
+            p.neglogp(px) for p, px in zip(
+                self.categoricals,
+                tf.unstack(x - self.low, axis=len(x.get_shape()) - 1))
+        ])
 
     def kl(self, other):
-        return tf.add_n([
-                            p.kl(q) for p, q in zip(self.categoricals, other.categoricals)
-                            ])
+        return tf.add_n(
+            [p.kl(q) for p, q in zip(self.categoricals, other.categoricals)])
 
     def entropy(self):
         return tf.add_n([p.entropy() for p in self.categoricals])
 
     def sample(self):
-        return self.low + tf.cast(tf.stack([p.sample() for p in self.categoricals], axis=-1), tf.int32)
+        return self.low + tf.cast(
+            tf.stack([p.sample()
+                      for p in self.categoricals], axis=-1), tf.int32)
 
     @classmethod
     def fromflat(cls, flat):
@@ -236,7 +250,8 @@ class MultiCategoricalPd(Pd):
 class DiagGaussianPd(Pd):
     def __init__(self, flat):
         self.flat = flat
-        mean, logstd = tf.split(axis=len(flat.shape) - 1, num_or_size_splits=2, value=flat)
+        mean, logstd = tf.split(
+            axis=len(flat.shape) - 1, num_or_size_splits=2, value=flat)
         self.mean = mean
         self.logstd = logstd
         self.std = tf.exp(logstd)
@@ -254,8 +269,11 @@ class DiagGaussianPd(Pd):
 
     def kl(self, other):
         assert isinstance(other, DiagGaussianPd)
-        return U.sum(other.logstd - self.logstd + (tf.square(self.std) + tf.square(self.mean - other.mean)) / (
-        2.0 * tf.square(other.std)) - 0.5, axis=-1)
+        return U.sum(
+            other.logstd - self.logstd +
+            (tf.square(self.std) + tf.square(self.mean - other.mean)) /
+            (2.0 * tf.square(other.std)) - 0.5,
+            axis=-1)
 
     def entropy(self):
         return U.sum(self.logstd + .5 * np.log(2.0 * np.pi * np.e), axis=-1)
@@ -280,14 +298,25 @@ class BernoulliPd(Pd):
         return tf.round(self.ps)
 
     def neglogp(self, x):
-        return U.sum(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=tf.to_float(x)), axis=-1)
+        return U.sum(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                logits=self.logits, labels=tf.to_float(x)),
+            axis=-1)
 
     def kl(self, other):
-        return U.sum(tf.nn.sigmoid_cross_entropy_with_logits(logits=other.logits, labels=self.ps), axis=-1) - U.sum(
-            tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=self.ps), axis=-1)
+        return U.sum(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                logits=other.logits, labels=self.ps),
+            axis=-1) - U.sum(
+                tf.nn.sigmoid_cross_entropy_with_logits(
+                    logits=self.logits, labels=self.ps),
+                axis=-1)
 
     def entropy(self):
-        return U.sum(tf.nn.sigmoid_cross_entropy_with_logits(logits=self.logits, labels=self.ps), axis=-1)
+        return U.sum(
+            tf.nn.sigmoid_cross_entropy_with_logits(
+                logits=self.logits, labels=self.ps),
+            axis=-1)
 
     def sample(self):
         u = tf.random_uniform(tf.shape(self.ps))
@@ -349,7 +378,7 @@ def validate_probtype(probtype, pdparam):
     calcent = U.function([M], pd.entropy())
     Xval = U.eval(pd.sample(), feed_dict={M: Mval})
     logliks = calcloglik(Xval, Mval)
-    entval_ll = - logliks.mean()  # pylint: disable=E1101
+    entval_ll = -logliks.mean()  # pylint: disable=E1101
     entval_ll_stderr = logliks.std() / np.sqrt(N)  # pylint: disable=E1101
     entval = calcent(Mval).mean()  # pylint: disable=E1101
     assert np.abs(entval - entval_ll) < 3 * entval_ll_stderr  # within 3 sigmas
@@ -362,6 +391,6 @@ def validate_probtype(probtype, pdparam):
     calckl = U.function([M, M2], pd.kl(pd2))
     klval = calckl(Mval, Mval2).mean()  # pylint: disable=E1101
     logliks = calcloglik(Xval, Mval2)
-    klval_ll = - entval - logliks.mean()  # pylint: disable=E1101
+    klval_ll = -entval - logliks.mean()  # pylint: disable=E1101
     klval_ll_stderr = logliks.std() / np.sqrt(N)  # pylint: disable=E1101
     assert np.abs(klval - klval_ll) < 3 * klval_ll_stderr  # within 3 sigmas

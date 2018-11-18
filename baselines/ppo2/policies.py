@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell_impl import LSTMCell, LSTMStateTuple
 
-from baselines.a2c.utils import conv, fc, conv_to_fc, batch_to_seq, seq_to_batch, lnlstm
+from baselines.a2c.utils import batch_to_seq, conv, conv_to_fc, fc
 from baselines.common.distributions import make_pdtype
 
 
@@ -14,13 +14,21 @@ def squash(vector, epsilon=1e-9):
         A tensor with the same shape as vector but squashed in 'vec_len' dimension.
     """
     vec_squared_norm = tf.reduce_sum(tf.square(vector), -2, keepdims=True)
-    scalar_factor = vec_squared_norm / (1 + vec_squared_norm) / tf.sqrt(vec_squared_norm + epsilon)
+    scalar_factor = vec_squared_norm / (
+        1 + vec_squared_norm) / tf.sqrt(vec_squared_norm + epsilon)
     # element-wise
     return scalar_factor * vector
 
 
-def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
-            stddev=1.0, iter_routing=1):
+def routing(inputs,
+            v_J,
+            batch_size,
+            num_caps_i,
+            num_caps_j,
+            len_u_i,
+            len_v_j,
+            stddev=1.0,
+            iter_routing=1):
     """ The routing algorithm.
     Args:
         inputs: A Tensor with [batch_size, num_caps_i=1152, 1, length(u_i)=8, 1]
@@ -37,8 +45,11 @@ def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
 
     b_IJ = tf.zeros([batch_size, num_caps_i, num_caps_j, 1, 1])
 
-    W = tf.get_variable('Weight', shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j), dtype=tf.float32,
-                        initializer=tf.random_normal_initializer(stddev=stddev))
+    W = tf.get_variable(
+        'Weight',
+        shape=(1, num_caps_i, num_caps_j, len_u_i, len_v_j),
+        dtype=tf.float32,
+        initializer=tf.random_normal_initializer(stddev=stddev))
     assert W.shape == [1, num_caps_i, num_caps_j, len_u_i, len_v_j]
 
     # Eq.2, calc u_hat
@@ -61,7 +72,9 @@ def routing(inputs, v_J, batch_size, num_caps_i, num_caps_j, len_u_i, len_v_j,
 
     # Check shapes before entering iter loop.
     v_J = tf.reshape(v_J, [batch_size, 1, num_caps_j, len_v_j, 1])
-    assert inputs.get_shape() == [batch_size, num_caps_i, num_caps_j, len_u_i, 1]
+    assert inputs.get_shape() == [
+        batch_size, num_caps_i, num_caps_j, len_u_i, 1
+    ]
     assert v_J.shape == [batch_size, 1, num_caps_j, len_v_j, 1]
     assert b_IJ.shape == [batch_size, num_caps_i, num_caps_j, 1, 1]
     assert u_hat.shape == [batch_size, num_caps_i, num_caps_j, len_v_j, 1]
@@ -105,10 +118,17 @@ def cluster(inputs, centroids, n_clusters, batch_size, size_cluster):
     assert inputs.shape == [batch_size, size_cluster]
     assert centroids.shape == [batch_size, n_clusters * size_cluster]
     inputs = tf.reshape(inputs, shape=[batch_size, 1, size_cluster])
-    centroids = tf.reshape(centroids, shape=[batch_size, n_clusters, size_cluster])
-    clusters = routing(inputs=inputs, v_J=centroids, batch_size=batch_size, num_caps_i=1,
-                       num_caps_j=n_clusters, len_u_i=size_cluster, len_v_j=size_cluster,
-                       iter_routing=1)
+    centroids = tf.reshape(
+        centroids, shape=[batch_size, n_clusters, size_cluster])
+    clusters = routing(
+        inputs=inputs,
+        v_J=centroids,
+        batch_size=batch_size,
+        num_caps_i=1,
+        num_caps_j=n_clusters,
+        len_u_i=size_cluster,
+        len_v_j=size_cluster,
+        iter_routing=1)
     assert clusters.shape == [batch_size, n_clusters, size_cluster]
     return tf.reshape(clusters, [batch_size, n_clusters * size_cluster])
 
@@ -120,8 +140,8 @@ def lstm(inputs, c, h, nbatch, nsteps, size_in, size_out):
     cell = LSTMCell(size_out)
     inputs = tf.reshape(inputs, [nbatch, nsteps, size_out])
     state_in = LSTMStateTuple(c, h)
-    outputs, state_out = tf.nn.dynamic_rnn(cell, inputs, dtype=tf.float32,
-                                           initial_state=state_in)
+    outputs, state_out = tf.nn.dynamic_rnn(
+        cell, inputs, dtype=tf.float32, initial_state=state_in)
     assert outputs.shape == [nbatch, nsteps, size_out]
     assert state_out.c.shape == [nbatch, size_out]
     assert state_out.h.shape == [nbatch, size_out]
@@ -136,7 +156,8 @@ def weight(inputs, c, nbatch, nsteps, n_clusters, size):
     inputs = tf.reshape(inputs, [nbatch * nsteps, n_clusters, size])
     c = tf.reshape(c, [nbatch, n_clusters, size])
 
-    weights = tf.sqrt(tf.reduce_sum(axis=2, input_tensor=tf.square(c), keepdims=True))
+    weights = tf.sqrt(
+        tf.reduce_sum(axis=2, input_tensor=tf.square(c), keepdims=True))
     assert weights.shape == [nbatch, n_clusters, 1]
     weights = tf.tile(weights, [nsteps, 1, 1])
     assert weights.shape == [nbatch * nsteps, n_clusters, 1]
@@ -147,8 +168,15 @@ def weight(inputs, c, nbatch, nsteps, n_clusters, size):
 
 
 class CapsulesPolicy(object):
-    def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, size_cluster=64, reuse=False):  # pylint: disable=W0613
-        ob_shape = (nbatch,) + ob_space.shape
+    def __init__(self,
+                 sess,
+                 ob_space,
+                 ac_space,
+                 nbatch,
+                 nsteps,
+                 size_cluster=64,
+                 reuse=False):  # pylint: disable=W0613
+        ob_shape = (nbatch, ) + ob_space.shape
         if ac_space.shape == ():
             actdim = 1
         else:
@@ -161,7 +189,8 @@ class CapsulesPolicy(object):
 
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         M = tf.placeholder(tf.float32, [nbatch], name='M')  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, 2 * size_lstm], name='S')  # states
+        S = tf.placeholder(
+            tf.float32, [nenv, 2 * size_lstm], name='S')  # states
 
         with tf.variable_scope("model", reuse=reuse):
             c, h = tf.split(value=S, num_or_size_splits=2, axis=1)
@@ -176,19 +205,25 @@ class CapsulesPolicy(object):
             else:
                 h0 = X
 
-            h1 = fc(h0, 'fc1', nh=size_cluster, init_scale=np.sqrt(2), act=tf.tanh)
+            h1 = fc(
+                h0, 'fc1', nh=size_cluster, init_scale=np.sqrt(2), act=tf.tanh)
 
             # Associate new observation (h1) with existing hypotheses (tiled_c).
             # Produce versions of hypothesis weighted by their relation to existing hypotheses.
-            h2 = cluster(inputs=h1, centroids=tiled_c,
-                         batch_size=nbatch, n_clusters=n_capsules, size_cluster=size_cluster)
+            h2 = cluster(
+                inputs=h1,
+                centroids=tiled_c,
+                batch_size=nbatch,
+                n_clusters=n_capsules,
+                size_cluster=size_cluster)
             assert h2.shape == [nbatch, size_lstm]
             assert tiled_c.shape == [nbatch, size_lstm]
 
             # Update existing hypotheses with new information.
             c1 = tf.concat(axis=1, values=[h2, tiled_c])
             c2 = fc(c1, 'cnew', nh=size_lstm)
-            c3 = tf.reduce_mean(axis=0, input_tensor=tf.reshape(c2, [nsteps, nenv, size_lstm]))
+            c3 = tf.reduce_mean(
+                axis=0, input_tensor=tf.reshape(c2, [nsteps, nenv, size_lstm]))
             state_out = [c3, h]
             # state_out = [tf.sin(tf.reduce_sum(cnew, axis=0)), h]
             # h3, state_out = lstm(inputs=h2, c=c, h=h,
@@ -196,17 +231,23 @@ class CapsulesPolicy(object):
             #                      size_in=size_lstm, size_out=size_lstm)
 
             # Weight outputs by 'confidence' of hypotheses.
-            h4 = weight(inputs=h2, c=c,
-                        nbatch=nenv, nsteps=nsteps,
-                        n_clusters=n_capsules, size=size_cluster)
+            h4 = weight(
+                inputs=h2,
+                c=c,
+                nbatch=nenv,
+                nsteps=nsteps,
+                n_clusters=n_capsules,
+                size=size_cluster)
 
             h5 = fc(h4, 'pi_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             pi = fc(h5, 'pi', actdim, act=lambda x: x, init_scale=0.01)
             h5 = fc(h4, 'vf_fc', 64, init_scale=np.sqrt(2), act=tf.tanh)
             vf = fc(h5, 'vf', 1, act=lambda x: x)[:, 0]
 
-            logstd = tf.get_variable(name="logstd", shape=[1, actdim],
-                                     initializer=tf.zeros_initializer())
+            logstd = tf.get_variable(
+                name="logstd",
+                shape=[1, actdim],
+                initializer=tf.zeros_initializer())
 
         snew = tf.concat(state_out, axis=1)
         pdparam = tf.concat([pi, pi * 0.0 + logstd], axis=1)
@@ -216,10 +257,15 @@ class CapsulesPolicy(object):
 
         a0 = self.pd.sample()
         neglogp0 = self.pd.neglogp(a0)
-        self.initial_state = np.zeros([nenv, 2 * n_capsules * size_cluster], dtype=np.float32)
+        self.initial_state = np.zeros([nenv, 2 * n_capsules * size_cluster],
+                                      dtype=np.float32)
 
         def step(ob, state, mask):
-            return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
+            return sess.run([a0, vf, snew, neglogp0], {
+                X: ob,
+                S: state,
+                M: mask
+            })
 
         def value(ob, state, mask):
             return sess.run(vf, {X: ob, S: state, M: mask})
@@ -234,8 +280,15 @@ class CapsulesPolicy(object):
 
 
 class LstmPolicy(object):
-    def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, size_mem=256, reuse=False):  # pylint: disable=W0613
-        ob_shape = (nbatch,) + ob_space.shape
+    def __init__(self,
+                 sess,
+                 ob_space,
+                 ac_space,
+                 nbatch,
+                 nsteps,
+                 size_mem=256,
+                 reuse=False):  # pylint: disable=W0613
+        ob_shape = (nbatch, ) + ob_space.shape
         if ac_space.shape == ():
             actdim = 1
         else:
@@ -264,8 +317,8 @@ class LstmPolicy(object):
             cell = LSTMCell(size_mem)
             state_tuple = cell.zero_state(batch_size=nbatch, dtype=tf.float32)
             # state_tuple = cell.zero_state(batch_size, dtype)
-            h5, s_out = tf.nn.dynamic_rnn(cell, h5, dtype=tf.float32,
-                                          initial_state=state_tuple)
+            h5, s_out = tf.nn.dynamic_rnn(
+                cell, h5, dtype=tf.float32, initial_state=state_tuple)
             # s_out = tf.stack(state_tuple)  # output of LSTM
 
             snew = tf.reshape(tf.transpose(s_out, [1, 0, 2]), shape=[nenv, -1])
@@ -275,8 +328,10 @@ class LstmPolicy(object):
             h1 = fc(X, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             h2 = fc(h1, 'vf_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             vf = fc(h5, 'vf', 1, act=lambda x: x)[:, 0]
-            logstd = tf.get_variable(name="logstd", shape=[1, actdim],
-                                     initializer=tf.zeros_initializer())
+            logstd = tf.get_variable(
+                name="logstd",
+                shape=[1, actdim],
+                initializer=tf.zeros_initializer())
 
         pdparam = tf.concat([pi, pi * 0.0 + logstd], axis=1)
 
@@ -289,7 +344,11 @@ class LstmPolicy(object):
         self.initial_state = np.zeros((nenv, size_mem * 2), dtype=np.float32)
 
         def step(ob, state, mask):
-            return sess.run([a0, vf, snew, neglogp0], {X: ob, S: state, M: mask})
+            return sess.run([a0, vf, snew, neglogp0], {
+                X: ob,
+                S: state,
+                M: mask
+            })
 
         def value(ob, state, mask):
             return sess.run(vf, {X: ob, S: state, M: mask})
@@ -317,7 +376,13 @@ class CnnPolicy(object):
         nact = ac_space.n
         X = tf.placeholder(tf.uint8, ob_shape)  # obs
         with tf.variable_scope("model", reuse=reuse):
-            h = conv(tf.cast(X, tf.float32) / 255., 'c1', nf=32, rf=8, stride=4, init_scale=np.sqrt(2))
+            h = conv(
+                tf.cast(X, tf.float32) / 255.,
+                'c1',
+                nf=32,
+                rf=8,
+                stride=4,
+                init_scale=np.sqrt(2))
             h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
             h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
             h3 = conv_to_fc(h3)
@@ -349,7 +414,7 @@ class CnnPolicy(object):
 class MlpPolicy(object):
     def __init__(self, sess, ob_space, ac_space, nbatch, nsteps, reuse=False):  # pylint: disable=W0613
         actdim = 1 if ac_space.shape == () else ac_space.shape[0]
-        ob_shape = (nbatch,) + ob_space.shape
+        ob_shape = (nbatch, ) + ob_space.shape
         X = tf.placeholder(tf.float32, ob_shape, name='Ob')  # obs
         with tf.variable_scope("model", reuse=reuse):
             if ob_space.shape == ():
@@ -362,8 +427,10 @@ class MlpPolicy(object):
             h1 = fc(h0, 'vf_fc1', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             h2 = fc(h1, 'vf_fc2', nh=64, init_scale=np.sqrt(2), act=tf.tanh)
             vf = fc(h2, 'vf', 1, act=lambda x: x)[:, 0]
-            logstd = tf.get_variable(name="logstd", shape=[1, actdim],
-                                     initializer=tf.zeros_initializer())
+            logstd = tf.get_variable(
+                name="logstd",
+                shape=[1, actdim],
+                initializer=tf.zeros_initializer())
 
         pdparam = tf.concat([pi, pi * 0.0 + logstd], axis=1)
 

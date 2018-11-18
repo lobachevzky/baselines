@@ -1,27 +1,31 @@
-import matplotlib
 import numpy as np
+
+from baselines.bench.monitor import load_results
+import matplotlib
+import matplotlib.pyplot as plt
 
 matplotlib.use('TkAgg')  # Can change to 'Agg' for non-interactive mode
 
-import matplotlib.pyplot as plt
 
 plt.rcParams['svg.fonttype'] = 'none'
 
-from baselines.bench.monitor import load_results
 
 X_TIMESTEPS = 'timesteps'
 X_EPISODES = 'episodes'
 X_WALLTIME = 'walltime_hrs'
 POSSIBLE_X_AXES = [X_TIMESTEPS, X_EPISODES, X_WALLTIME]
 EPISODES_WINDOW = 100
-COLORS = ['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink',
-          'brown', 'orange', 'teal', 'coral', 'lightblue', 'lime', 'lavender', 'turquoise',
-          'darkgreen', 'tan', 'salmon', 'gold', 'lightpurple', 'darkred', 'darkblue']
+COLORS = [
+    'blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple',
+    'pink', 'brown', 'orange', 'teal', 'coral', 'lightblue', 'lime',
+    'lavender', 'turquoise', 'darkgreen', 'tan', 'salmon', 'gold',
+    'lightpurple', 'darkred', 'darkblue'
+]
 
 
 def rolling_window(a, window):
     shape = a.shape[:-1] + (a.shape[-1] - window + 1, window)
-    strides = a.strides + (a.strides[-1],)
+    strides = a.strides + (a.strides[-1], )
     return np.lib.stride_tricks.as_strided(a, shape=shape, strides=strides)
 
 
@@ -53,7 +57,9 @@ def plot_curves(xy_list, xaxis, title):
     for (i, (x, y)) in enumerate(xy_list):
         color = COLORS[i]
         plt.scatter(x, y, s=2)
-        x, y_mean = window_func(x, y, EPISODES_WINDOW, np.mean)  # So returns average of last EPISODE_WINDOW episodes
+        x, y_mean = window_func(
+            x, y, EPISODES_WINDOW,
+            np.mean)  # So returns average of last EPISODE_WINDOW episodes
         plt.plot(x, y_mean, color=color)
     plt.xlim(minx, maxx)
     plt.title(title)
@@ -78,14 +84,19 @@ def plot_results(dirs, num_timesteps, xaxis, task_name):
 # log_viewer.plot_results(["./log"], 10e6, log_viewer.X_TIMESTEPS, "Breakout")
 # Here ./log is a directory containing the monitor.csv files
 
+
 def main():
     import argparse
     import os
-    parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--dirs', help='List of log directories', nargs='*', default=['./log'])
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument(
+        '--dirs', help='List of log directories', nargs='*', default=['./log'])
     parser.add_argument('--num_timesteps', type=int, default=int(10e6))
-    parser.add_argument('--xaxis', help='Varible on X-axis', default=X_TIMESTEPS)
-    parser.add_argument('--task_name', help='Title of plot', default='Breakout')
+    parser.add_argument(
+        '--xaxis', help='Varible on X-axis', default=X_TIMESTEPS)
+    parser.add_argument(
+        '--task_name', help='Title of plot', default='Breakout')
     args = parser.parse_args()
     args.dirs = [os.path.abspath(dir) for dir in args.dirs]
     plot_results(args.dirs, args.num_timesteps, args.xaxis, args.task_name)

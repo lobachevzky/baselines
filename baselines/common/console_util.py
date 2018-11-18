@@ -1,14 +1,14 @@
 from __future__ import print_function
 
-import time
 from contextlib import contextmanager
+import time
 
 import numpy as np
-
 
 # ================================================================
 # Misc
 # ================================================================
+
 
 def fmt_row(width, row, header=False):
     out = " | ".join(fmt_item(x, width) for x in row)
@@ -36,8 +36,7 @@ color2num = dict(
     magenta=35,
     cyan=36,
     white=37,
-    crimson=38
-)
+    crimson=38)
 
 
 def colorize(string, color, bold=False, highlight=False):
@@ -60,4 +59,8 @@ def timed(msg):
     MESSAGE_DEPTH += 1
     yield
     MESSAGE_DEPTH -= 1
-    print(colorize('\t' * MESSAGE_DEPTH + "done in %.3f seconds" % (time.time() - tstart), color='magenta'))
+    print(
+        colorize(
+            '\t' * MESSAGE_DEPTH +
+            "done in %.3f seconds" % (time.time() - tstart),
+            color='magenta'))

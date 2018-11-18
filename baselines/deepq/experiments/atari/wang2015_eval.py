@@ -3,12 +3,12 @@ import os
 
 import gym
 import numpy as np
-from baselines.common.atari_wrappers_deprecated import wrap_dqn
 
+from baselines import bench, deepq
+from baselines.common.atari_wrappers_deprecated import wrap_dqn
+from baselines.common.misc_util import boolean_flag, get_wrapper_by_name, set_global_seeds
 import baselines.common.tf_util as U
-from baselines import deepq, bench
-from baselines.common.misc_util import get_wrapper_by_name, boolean_flag, set_global_seeds
-from baselines.deepq.experiments.atari.model import model, dueling_model
+from baselines.deepq.experiments.atari.model import dueling_model, model
 
 
 def make_env(game_name):
@@ -21,11 +21,25 @@ def make_env(game_name):
 def parse_args():
     parser = argparse.ArgumentParser("Evaluate an already learned DQN model.")
     # Environment
-    parser.add_argument("--env", type=str, required=True, help="name of the game")
-    parser.add_argument("--model-dir", type=str, default=None, help="load model from this directory. ")
-    boolean_flag(parser, "stochastic", default=True,
-                 help="whether or not to use stochastic actions according to models eps value")
-    boolean_flag(parser, "dueling", default=False, help="whether or not to use dueling model")
+    parser.add_argument(
+        "--env", type=str, required=True, help="name of the game")
+    parser.add_argument(
+        "--model-dir",
+        type=str,
+        default=None,
+        help="load model from this directory. ")
+    boolean_flag(
+        parser,
+        "stochastic",
+        default=True,
+        help=
+        "whether or not to use stochastic actions according to models eps value"
+    )
+    boolean_flag(
+        parser,
+        "dueling",
+        default=False,
+        help="whether or not to use dueling model")
 
     return parser.parse_args()
 
@@ -38,7 +52,8 @@ def wang2015_eval(game_name, act, stochastic):
         env_monitored, eval_env = make_env(game_name)
         eval_env.unwrapped.seed(1)
 
-        get_wrapper_by_name(eval_env, "NoopResetEnv").override_num_noops = num_noops
+        get_wrapper_by_name(eval_env,
+                            "NoopResetEnv").override_num_noops = num_noops
 
         eval_episode_steps = 0
         done = True
@@ -57,8 +72,10 @@ def wang2015_eval(game_name, act, stochastic):
             if info["steps"] > 108000:  # 5 minutes of gameplay
                 episode_rewards.append(sum(env_monitored.rewards))
                 break
-        print("Num steps in episode {} was {} yielding {} reward".format(
-            num_noops, eval_episode_steps, episode_rewards[-1]), flush=True)
+        print(
+            "Num steps in episode {} was {} yielding {} reward".format(
+                num_noops, eval_episode_steps, episode_rewards[-1]),
+            flush=True)
     print("Evaluation results: " + str(np.mean(episode_rewards)))
     print("=============================================================")
     return np.mean(episode_rewards)
@@ -70,7 +87,8 @@ def main():
     with U.make_session(4):  # noqa
         _, env = make_env(args.env)
         act = deepq.build_act(
-            make_obs_ph=lambda name: U.Uint8Input(env.observation_space.shape, name=name),
+            make_obs_ph=
+            lambda name: U.Uint8Input(env.observation_space.shape, name=name),
             q_func=dueling_model if args.dueling else model,
             num_actions=env.action_space.n)
 
