@@ -51,7 +51,7 @@ class UnsupervisedEnv(hsr.HSREnv):
         return vectorize([s.observation, self.achieved_goal()]), r, t, i
 
     def reset(self):
-        return vectorize(super().reset())
+        return vectorize([super().reset().observation, self.achieved_goal()])
 
     def compute_reward(self):
         return -np.sum(np.square(self.reward_params - self.achieved_goal()))
