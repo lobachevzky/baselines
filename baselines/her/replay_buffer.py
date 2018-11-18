@@ -4,7 +4,8 @@ import numpy as np
 
 
 class ReplayBuffer:
-    def __init__(self, buffer_shapes, size_in_transitions, T, sample_transitions):
+    def __init__(self, buffer_shapes, size_in_transitions, T,
+                 sample_transitions):
         """Creates a replay buffer.
 
         Args:
@@ -20,8 +21,10 @@ class ReplayBuffer:
         self.sample_transitions = sample_transitions
 
         # self.buffers is {key: array(size_in_episodes x T or T+1 x dim_key)}
-        self.buffers = {key: np.empty([self.size, *shape])
-                        for key, shape in buffer_shapes.items()}
+        self.buffers = {
+            key: np.empty([self.size, *shape])
+            for key, shape in buffer_shapes.items()
+        }
 
         # memory management
         self.current_size = 0
@@ -87,11 +90,11 @@ class ReplayBuffer:
             self.current_size = 0
 
     def _get_storage_idx(self, inc=None):
-        inc = inc or 1   # size increment
+        inc = inc or 1  # size increment
         assert inc <= self.size, "Batch committed to replay is too large!"
         # go consecutively until you hit the end, and then go randomly.
-        if self.current_size+inc <= self.size:
-            idx = np.arange(self.current_size, self.current_size+inc)
+        if self.current_size + inc <= self.size:
+            idx = np.arange(self.current_size, self.current_size + inc)
         elif self.current_size < self.size:
             overflow = inc - (self.size - self.current_size)
             idx_a = np.arange(self.current_size, self.size)
@@ -101,7 +104,7 @@ class ReplayBuffer:
             idx = np.random.randint(0, self.size, inc)
 
         # update replay size
-        self.current_size = min(self.size, self.current_size+inc)
+        self.current_size = min(self.size, self.current_size + inc)
 
         if inc == 1:
             idx = idx[0]

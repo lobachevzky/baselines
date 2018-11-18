@@ -5,8 +5,9 @@ the values of each item is a list storing the expert trajectory sequentially
 a transition can be: (data['obs'][t], data['acs'][t], data['obs'][t+1]) and get reward data['rews'][t]
 '''
 
-from baselines import logger
 import numpy as np
+
+from baselines import logger
 
 
 class Dset(object):
@@ -40,7 +41,11 @@ class Dset(object):
 
 
 class Mujoco_Dset(object):
-    def __init__(self, expert_path, train_fraction=0.7, traj_limitation=-1, randomize=True):
+    def __init__(self,
+                 expert_path,
+                 train_fraction=0.7,
+                 traj_limitation=-1,
+                 randomize=True):
         traj_data = np.load(expert_path)
         if traj_limitation < 0:
             traj_limitation = len(traj_data['obs'])
@@ -54,7 +59,7 @@ class Mujoco_Dset(object):
         self.acs = np.reshape(acs, [-1, np.prod(acs.shape[2:])])
 
         self.rets = traj_data['ep_rets'][:traj_limitation]
-        self.avg_ret = sum(self.rets)/len(self.rets)
+        self.avg_ret = sum(self.rets) / len(self.rets)
         self.std_ret = np.std(np.array(self.rets))
         if len(self.acs) > 2:
             self.acs = np.squeeze(self.acs)
@@ -64,12 +69,14 @@ class Mujoco_Dset(object):
         self.randomize = randomize
         self.dset = Dset(self.obs, self.acs, self.randomize)
         # for behavior cloning
-        self.train_set = Dset(self.obs[:int(self.num_transition*train_fraction), :],
-                              self.acs[:int(self.num_transition*train_fraction), :],
-                              self.randomize)
-        self.val_set = Dset(self.obs[int(self.num_transition*train_fraction):, :],
-                            self.acs[int(self.num_transition*train_fraction):, :],
-                            self.randomize)
+        self.train_set = Dset(
+            self.obs[:int(self.num_transition * train_fraction), :],
+            self.acs[:int(self.num_transition * train_fraction), :],
+            self.randomize)
+        self.val_set = Dset(
+            self.obs[int(self.num_transition * train_fraction):, :],
+            self.acs[int(self.num_transition * train_fraction):, :],
+            self.randomize)
         self.log_info()
 
     def log_info(self):
@@ -100,10 +107,14 @@ def test(expert_path, traj_limitation, plot):
     if plot:
         dset.plot()
 
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("--expert_path", type=str, default="../data/deterministic.trpo.Hopper.0.00.npz")
+    parser.add_argument(
+        "--expert_path",
+        type=str,
+        default="../data/deterministic.trpo.Hopper.0.00.npz")
     parser.add_argument("--traj_limitation", type=int, default=None)
     parser.add_argument("--plot", type=bool, default=False)
     args = parser.parse_args()

@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+
 def gmatmul(a, b, transpose_a=False, transpose_b=False, reduce_dim=None):
     assert reduce_dim is not None
 
@@ -14,8 +15,8 @@ def gmatmul(a, b, transpose_a=False, transpose_b=False, reduce_dim=None):
             b = tf.transpose(b, b_dims)
         b_t_shape = b.get_shape()
         b = tf.reshape(b, [int(b_shape[reduce_dim]), -1])
-        result = tf.matmul(a, b, transpose_a=transpose_a,
-                           transpose_b=transpose_b)
+        result = tf.matmul(
+            a, b, transpose_a=transpose_a, transpose_b=transpose_b)
         result = tf.reshape(result, b_t_shape)
         if reduce_dim != 0:
             b_dims = list(range(len(b_shape)))
@@ -36,8 +37,8 @@ def gmatmul(a, b, transpose_a=False, transpose_b=False, reduce_dim=None):
             a = tf.transpose(a, a_dims)
         a_t_shape = a.get_shape()
         a = tf.reshape(a, [-1, int(a_shape[reduce_dim])])
-        result = tf.matmul(a, b, transpose_a=transpose_a,
-                           transpose_b=transpose_b)
+        result = tf.matmul(
+            a, b, transpose_a=transpose_a, transpose_b=transpose_b)
         result = tf.reshape(result, a_t_shape)
         if reduce_dim != outter_dim:
             a_dims = list(range(len(a_shape)))
@@ -47,7 +48,8 @@ def gmatmul(a, b, transpose_a=False, transpose_b=False, reduce_dim=None):
         return result
 
     elif len(a.get_shape()) == 2 and len(b.get_shape()) == 2:
-        return tf.matmul(a, b, transpose_a=transpose_a, transpose_b=transpose_b)
+        return tf.matmul(
+            a, b, transpose_a=transpose_a, transpose_b=transpose_b)
 
     assert False, 'something went wrong'
 
@@ -74,12 +76,16 @@ def factorReshape(Q, e, grad, facIndx=0, ftype='act'):
     grad_shape = grad.get_shape()
     if ftype == 'act':
         assert e.get_shape()[0] == grad_shape[facIndx]
-        expanded_shape = [1, ] * len(grad_shape)
+        expanded_shape = [
+            1,
+        ] * len(grad_shape)
         expanded_shape[facIndx] = -1
         e = tf.reshape(e, expanded_shape)
     if ftype == 'grad':
         assert e.get_shape()[0] == grad_shape[len(grad_shape) - facIndx - 1]
-        expanded_shape = [1, ] * len(grad_shape)
+        expanded_shape = [
+            1,
+        ] * len(grad_shape)
         expanded_shape[len(grad_shape) - facIndx - 1] = -1
         e = tf.reshape(e, expanded_shape)
 

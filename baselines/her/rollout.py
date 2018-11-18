@@ -1,18 +1,29 @@
 from collections import deque
-
-import numpy as np
 import pickle
+
 from mujoco_py import MujocoException
+import numpy as np
 
 from baselines.her.util import convert_episode_to_batch_major, store_args
 
 
 class RolloutWorker:
-
     @store_args
-    def __init__(self, make_env, policy, dims, logger, T, rollout_batch_size=1,
-                 exploit=False, use_target_net=False, compute_Q=False, noise_eps=0,
-                 random_eps=0, history_len=100, render=False, **kwargs):
+    def __init__(self,
+                 make_env,
+                 policy,
+                 dims,
+                 logger,
+                 T,
+                 rollout_batch_size=1,
+                 exploit=False,
+                 use_target_net=False,
+                 compute_Q=False,
+                 noise_eps=0,
+                 random_eps=0,
+                 history_len=100,
+                 render=False,
+                 **kwargs):
         """Rollout worker generates experience by interacting with one or many environments.
 
         Args:
@@ -34,15 +45,21 @@ class RolloutWorker:
         self.envs = [make_env() for _ in range(rollout_batch_size)]
         assert self.T > 0
 
-        self.info_keys = [key.replace('info_', '') for key in dims.keys() if key.startswith('info_')]
+        self.info_keys = [
+            key.replace('info_', '') for key in dims.keys()
+            if key.startswith('info_')
+        ]
 
         self.success_history = deque(maxlen=history_len)
         self.Q_history = deque(maxlen=history_len)
 
         self.n_episodes = 0
-        self.g = np.empty((self.rollout_batch_size, self.dims['g']), np.float32)  # goals
-        self.initial_o = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)  # observations
-        self.initial_ag = np.empty((self.rollout_batch_size, self.dims['g']), np.float32)  # achieved goals
+        self.g = np.empty((self.rollout_batch_size, self.dims['g']),
+                          np.float32)  # goals
+        self.initial_o = np.empty((self.rollout_batch_size, self.dims['o']),
+                                  np.float32)  # observations
+        self.initial_ag = np.empty((self.rollout_batch_size, self.dims['g']),
+                                   np.float32)  # achieved goals
         self.reset_all_rollouts()
         self.clear_history()
 
@@ -68,18 +85,26 @@ class RolloutWorker:
         self.reset_all_rollouts()
 
         # compute observations
-        o = np.empty((self.rollout_batch_size, self.dims['o']), np.float32)  # observations
-        ag = np.empty((self.rollout_batch_size, self.dims['g']), np.float32)  # achieved goals
+        o = np.empty((self.rollout_batch_size, self.dims['o']),
+                     np.float32)  # observations
+        ag = np.empty((self.rollout_batch_size, self.dims['g']),
+                      np.float32)  # achieved goals
         o[:] = self.initial_o
         ag[:] = self.initial_ag
 
         # generate episodes
         obs, achieved_goals, acts, goals, successes = [], [], [], [], []
-        info_values = [np.empty((self.T, self.rollout_batch_size, self.dims['info_' + key]), np.float32) for key in self.info_keys]
+        info_values = [
+            np.empty(
+                (self.T, self.rollout_batch_size, self.dims['info_' + key]),
+                np.float32) for key in self.info_keys
+        ]
         Qs = []
         for t in range(self.T):
             policy_output = self.policy.get_actions(
-                o, ag, self.g,
+                o,
+                ag,
+                self.g,
                 compute_Q=self.compute_Q,
                 noise_eps=self.noise_eps if not self.exploit else 0.,
                 random_eps=self.random_eps if not self.exploit else 0.,
@@ -116,7 +141,8 @@ class RolloutWorker:
                     return self.generate_rollouts()
 
             if np.isnan(o_new).any():
-                self.logger.warn('NaN caught during rollout generation. Trying again...')
+                self.logger.warn(
+                    'NaN caught during rollout generation. Trying again...')
                 self.reset_all_rollouts()
                 return self.generate_rollouts()
 
@@ -131,16 +157,13 @@ class RolloutWorker:
         achieved_goals.append(ag.copy())
         self.initial_o[:] = o
 
-        episode = dict(o=obs,
-                       u=acts,
-                       g=goals,
-                       ag=achieved_goals)
+        episode = dict(o=obs, u=acts, g=goals, ag=achieved_goals)
         for key, value in zip(self.info_keys, info_values):
             episode['info_{}'.format(key)] = value
 
         # stats
         successful = np.array(successes)[-1, :]
-        assert successful.shape == (self.rollout_batch_size,)
+        assert successful.shape == (self.rollout_batch_size, )
         success_rate = np.mean(successful)
         self.success_history.append(success_rate)
         if self.compute_Q:

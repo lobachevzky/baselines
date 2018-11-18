@@ -50,10 +50,9 @@ class ObservationInput(PlaceholderTfInput):
         name: str
                 tensorflow name of the underlying placeholder
         """
-        inpt, self.processed_inpt = observation_input(observation_space, name=name)
+        inpt, self.processed_inpt = observation_input(
+            observation_space, name=name)
         super().__init__(inpt)
 
     def get(self):
         return self.processed_inpt
-
-
