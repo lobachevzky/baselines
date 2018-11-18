@@ -15,10 +15,12 @@ from baselines.bench.monitor import Monitor
 from baselines.common.misc_util import set_global_seeds
 from baselines.common.models import mlp
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
+from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
-from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedEnv, UnsupervisedDummyVecEnv
+from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedEnv, UnsupervisedDummyVecEnv, \
+    UnsupervisedVecEnv
 
 
 def parse_lr(string: str) -> callable:
@@ -36,7 +38,6 @@ class RewardStructure:
         achieved = Observation(
             *tf.split(X, self.subspace_sizes, axis=1)).goal
         return -tf.reduce_sum(tf.square(achieved - self.params))
-
 
 
 @env_wrapper
@@ -67,7 +68,8 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr,
     if env is UnsupervisedEnv:
         assert isinstance(sample_env, UnsupervisedEnv)
         reward_structure = RewardStructure(subspace_sizes=sample_env.subspace_sizes)
-        env = UnsupervisedDummyVecEnv([make_env], reward_params=reward_structure.params)
+        env = UnsupervisedVecEnv([make_env for _ in range(ncpu)],
+                                 reward_params=reward_structure.params)
 
         def network(X: tf.Tensor):
             nbatch = tf.shape(X)[0]
@@ -76,12 +78,11 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr,
             inputs = tf.concat([X, reward_params], axis=1)
             return mlp(**network_args)(inputs)
 
-        # TODO: check how network is being used and if these changes are kosher everywhere
-        # TODO: find params in ppo model
-        # TODO: apply reward_function
+        # TODO: make sure tf reward_function and np reward_function are doing the same
+        # thing
     else:
         reward_structure = None
-        env = DummyVecEnv([make_env])
+        env = SubprocVecEnv([make_env for _ in range(ncpu)])
         network = 'mlp'
 
     env = VecNormalize(env)

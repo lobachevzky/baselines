@@ -131,11 +131,12 @@ class Model(object):
             loss=pg_loss - entropy * ent_coef + vf_loss * vf_coef)
 
         if reward_structure:
-            # reward_structure.params= tf.Print(reward_structure.params,
-            #                                   [reward_structure.params], message='params')
-            train_reward = get_train_op(
-                params=reward_structure.params, loss=get_pg_loss(R))
-            _train = tf.group(_train, train_reward)
+            with tf.control_dependencies([
+                tf.Print(pg_loss, [reward_structure.params], message='update params')
+            ]):
+                train_reward = get_train_op(
+                    params=reward_structure.params, loss=get_pg_loss(R))
+                _train = tf.group(_train, train_reward)
 
         def train(lr,
                   cliprange,

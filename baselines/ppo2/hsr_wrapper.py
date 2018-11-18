@@ -56,6 +56,7 @@ class UnsupervisedEnv(hsr.HSREnv):
         return self.gripper_pos()
 
     def new_goal(self):
+        print('new goal params', self.reward_params)
         return self.reward_params
 
     def set_reward_params(self, reward_params):
@@ -84,6 +85,7 @@ class UnsupervisedDummyVecEnv(DummyVecEnv):
 
     def reset(self):
         params = get_session().run(self.params)
+        print('run session params', params)
         for env in self.unwrapped_envs:
             env.set_reward_params(params)
         return super().reset()
