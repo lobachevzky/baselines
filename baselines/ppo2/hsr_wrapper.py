@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from baselines.common.tf_util import get_session
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from environments import hindsight_wrapper as hw
 from environments import hsr
@@ -86,3 +87,13 @@ class UnsupervisedVecEnv(SubprocVecEnv):
             params = tf.get_variable('params')
         for i, remote in enumerate(self.remotes):
             remote.send(('set_reward_params', params[i]))
+        return super().reset()
+
+
+class UnsupervisedDummyVecEnv(DummyVecEnv):
+    def reset(self):
+        with tf.variable_scope('reward', reuse=tf.AUTO_REUSE):
+            params = tf.get_variable('params')
+        for i, env in enumerate(self.envs):
+            env.set_reward_params(params[i])
+        return super().reset()

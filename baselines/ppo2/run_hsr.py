@@ -12,7 +12,8 @@ from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
-from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedEnv, UnsupervisedVecEnv
+from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedEnv, UnsupervisedVecEnv, \
+    UnsupervisedDummyVecEnv
 from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, parse_activation, parse_groups
 
 
@@ -46,7 +47,8 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, goal_activation,
 
     if env == 'unsupervised':
         reward_function = UnsupervisedEnv.reward_function
-        env = UnsupervisedVecEnv([make_env(i + seed) for i in range(ncpu)])
+        env = UnsupervisedDummyVecEnv(
+            [make_env(i + seed) for i in range(ncpu)])
     else:
         reward_function = None
         env = DummyVecEnv([make_env])

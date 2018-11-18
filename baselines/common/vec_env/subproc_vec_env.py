@@ -2,8 +2,9 @@ from multiprocessing import Pipe, Process
 
 import numpy as np
 
-# local
 from baselines.ppo2.hsr_wrapper import UnsupervisedEnv
+
+# local
 from . import CloudpickleWrapper, VecEnv
 
 
