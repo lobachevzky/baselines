@@ -67,10 +67,10 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         assert isinstance(sample_env, UnsupervisedEnv)
         reward_structure = RewardStructure(
             subspace_sizes=sample_env.subspace_sizes)
-        # env = UnsupervisedVecEnv([make_env for _ in range(ncpu)],
-        #                          reward_params=reward_structure.params)
-        env = UnsupervisedDummyVecEnv([make_env],
-                                      reward_params=reward_structure.params)
+        env = UnsupervisedVecEnv([make_env for _ in range(ncpu)],
+                                 reward_params=reward_structure.params)
+        # env = UnsupervisedDummyVecEnv([make_env],
+        #                               reward_params=reward_structure.params)
 
         def network(X: tf.Tensor):
             nbatch = tf.shape(X)[0]

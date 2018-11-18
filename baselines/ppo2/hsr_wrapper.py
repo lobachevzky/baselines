@@ -1,4 +1,6 @@
 # third party
+from collections import namedtuple
+
 from environments import hsr
 import numpy as np
 from sac.utils import concat_spaces, space_shape, unwrap_env, vectorize
@@ -25,6 +27,7 @@ class HSREnv(hsr.HSREnv):
     def reset(self):
         return vectorize(super().reset())
 
+StepData = namedtuple('StepData', 'actions reward_params')
 
 class UnsupervisedEnv(hsr.HSREnv):
     def __init__(self, **kwargs):
@@ -42,8 +45,9 @@ class UnsupervisedEnv(hsr.HSREnv):
         self.reward_params = None
         self.sess = get_session()
 
-    def step(self, action):
-        s, r, t, i = super().step(action)
+    def step(self, step_data: StepData):
+        self.reward_params = step_data.reward_params
+        s, r, t, i = super().step(step_data.actions)
         return vectorize([s.observation, self.achieved_goal()]), r, t, i
 
     def reset(self):
@@ -71,12 +75,9 @@ class UnsupervisedVecEnv(SubprocVecEnv):
         super().__init__(env_fns)
         self.params = reward_params
 
-    def reset(self):
-        self._assert_not_closed()
-        params = get_session().run(self.params)
-        for remote in self.remotes:
-            remote.send(('set_reward_params', params))
-        return super().reset()
+    def step(self, actions):
+        super().step(StepData(actions=actions,
+                              reward_params=self.params))
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
@@ -88,17 +89,14 @@ class UnsupervisedDummyVecEnv(DummyVecEnv):
             for env in self.envs
         ]
 
-    def reset(self):
-        params = get_session().run(self.params)
-        print('run session params', params)
-        for env in self.unwrapped_envs:
-            env.set_reward_params(params)
-        return super().reset()
-
-    @property
-    def param_shape(self):
-        return self.unwrapped_envs[0].param_shape
-
-    @property
-    def raw_observation_space(self):
-        return self.unwrapped_envs[0].raw_observation_space
+    def step(self, actions):
+        super().step(StepData(actions=actions,
+                              reward_params=self.params))
+    #
+    # @property
+    # def param_shape(self):
+    #     return self.unwrapped_envs[0].param_shape
+    #
+    # @property
+    # def raw_observation_space(self):
+    #     return self.unwrapped_envs[0].raw_observation_space
