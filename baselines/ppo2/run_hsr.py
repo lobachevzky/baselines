@@ -22,8 +22,8 @@ def parse_lr(string: str) -> callable:
 
 
 @env_wrapper
-def main(max_steps, seed, logdir, env, ncpu, goal_lr, goal_activation,
-         goal_n_layers, goal_layer_size, env_args, **kwargs):
+def main(max_steps, seed, logdir, env, ncpu, goal_lr,
+         env_args, **kwargs):
 
     format_strs = ['stdout']
     if logdir:
@@ -99,8 +99,6 @@ def cli():
         type=parse_activation,
         default=tf.nn.relu,
         choices=ACTIVATIONS.values())
-    parser.add_argument('--goal-n-layers', type=int)
-    parser.add_argument('--goal-layer-size', type=int)
     parser.add_argument('--goal-lr', type=eval)
     parser.add_argument('--logdir', type=str, default=None)
     parser.add_argument('--seed', type=int, required=True)
