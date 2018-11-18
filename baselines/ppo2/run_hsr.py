@@ -15,6 +15,7 @@ from baselines import logger
 from baselines.bench.monitor import Monitor
 from baselines.common.misc_util import set_global_seeds
 from baselines.common.models import mlp
+from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
@@ -66,8 +67,10 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         assert isinstance(sample_env, UnsupervisedEnv)
         reward_structure = RewardStructure(
             subspace_sizes=sample_env.subspace_sizes)
-        env = UnsupervisedVecEnv([make_env for _ in range(ncpu)],
-                                 reward_params=reward_structure.params)
+        # env = UnsupervisedVecEnv([make_env for _ in range(ncpu)],
+        #                          reward_params=reward_structure.params)
+        env = UnsupervisedDummyVecEnv([make_env],
+                                      reward_params=reward_structure.params)
 
         def network(X: tf.Tensor):
             nbatch = tf.shape(X)[0]
@@ -80,7 +83,8 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         # thing
     else:
         reward_structure = None
-        env = SubprocVecEnv([make_env for _ in range(ncpu)])
+        # env = SubprocVecEnv([make_env for _ in range(ncpu)])
+        env = DummyVecEnv([make_env])
         network = 'mlp'
 
     env = VecNormalize(env)
