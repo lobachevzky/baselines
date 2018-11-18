@@ -8,6 +8,7 @@ import tensorflow as tf
 
 # first party
 from baselines.common.tf_util import get_session
+from baselines.common.vec_env import VecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 
@@ -73,7 +74,7 @@ class UnsupervisedEnv(hsr.HSREnv):
         self.reward_params = reward_params
 
 
-class UnsupervisedVecEnv(SubprocVecEnv):
+class UnsupervisedSubprocVecEnv(SubprocVecEnv):
     def __init__(self, env_fns, reward_params: tf.Tensor):
         super().__init__(env_fns)
         self.params = reward_params
@@ -88,4 +89,14 @@ class UnsupervisedVecEnv(SubprocVecEnv):
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
-    pass
+    def __init__(self, env_fns, reward_params: tf.Tensor):
+        super().__init__(env_fns)
+        self.params = reward_params
+        self.sess = get_session()
+
+    def step_async(self, actions):
+        params = self.sess.run(self.params)
+        super().step_async([
+            StepData(actions=action, reward_params=params)
+            for action in actions
+        ])
