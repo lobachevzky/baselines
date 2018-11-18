@@ -2,15 +2,21 @@ from collections import deque
 from contextlib import contextmanager
 import time
 
-from mpi4py import MPI
 import numpy as np
 import tensorflow as tf
 
 from baselines import logger
-from baselines.common import colorize, dataset, explained_variance, zipsame
+from baselines.common import colorize, dataset, explained_variance, set_global_seeds, zipsame
 from baselines.common.cg import cg
+from baselines.common.input import observation_placeholder
 from baselines.common.mpi_adam import MpiAdam
+from baselines.common.policies import build_policy
 import baselines.common.tf_util as U
+
+try:
+    from mpi4py import MPI
+except ImportError:
+    MPI = None
 
 
 def traj_segment_generator(pi, env, horizon, stochastic):
@@ -36,7 +42,7 @@ def traj_segment_generator(pi, env, horizon, stochastic):
 
     while True:
         prevac = ac
-        ac, vpred = pi.act(stochastic, ob)
+        ac, vpred, _, _ = pi.step(ob, stochastic=stochastic)
         # Slight weirdness here because we need value function at time T
         # before returning segment [0, T-1] so we get the correct
         # terminal value
@@ -52,7 +58,7 @@ def traj_segment_generator(pi, env, horizon, stochastic):
                 "ep_rets": ep_rets,
                 "ep_lens": ep_lens
             }
-            _, vpred = pi.act(stochastic, ob)
+            _, vpred, _, _ = pi.step(ob, stochastic=stochastic)
             # Be careful!!! if you change the downstream algorithm to aggregate
             # several of these batches, then be sure to do a deepcopy
             ep_rets = []
@@ -95,50 +101,117 @@ def add_vtarg_and_adv(seg, gamma, lam):
 
 
 def learn(
-        env,
-        policy_func,
         *,
-        timesteps_per_batch,  # what to train on
-        max_kl,
-        cg_iters,
-        gamma,
-        lam,  # advantage estimation
-        entcoeff=0.0,
+        network,
+        env,
+        total_timesteps,
+        timesteps_per_batch=1024,  # what to train on
+        max_kl=0.001,
+        cg_iters=10,
+        gamma=0.99,
+        lam=1.0,  # advantage estimation
+        seed=None,
+        ent_coef=0.0,
         cg_damping=1e-2,
         vf_stepsize=3e-4,
         vf_iters=3,
-        max_timesteps=0,
         max_episodes=0,
         max_iters=0,  # time constraint
-        callback=None):
-    nworkers = MPI.COMM_WORLD.Get_size()
-    rank = MPI.COMM_WORLD.Get_rank()
+        callback=None,
+        load_path=None,
+        **network_kwargs):
+    '''
+    learn a policy function with TRPO algorithm
+
+    Parameters:
+    ----------
+
+    network                 neural network to learn. Can be either string ('mlp', 'cnn', 'lstm', 'lnlstm' for basic types)
+                            or function that takes input placeholder and returns tuple (output, None) for feedforward nets
+                            or (output, (state_placeholder, state_output, mask_placeholder)) for recurrent nets
+
+    env                     environment (one of the gym environments or wrapped via baselines.common.vec_env.VecEnv-type class
+
+    timesteps_per_batch     timesteps per gradient estimation batch
+
+    max_kl                  max KL divergence between old policy and new policy ( KL(pi_old || pi) )
+
+    ent_coef                coefficient of policy entropy term in the optimization objective
+
+    cg_iters                number of iterations of conjugate gradient algorithm
+
+    cg_damping              conjugate gradient damping
+
+    vf_stepsize             learning rate for adam optimizer used to optimie value function loss
+
+    vf_iters                number of iterations of value function optimization iterations per each policy optimization step
+
+    total_timesteps           max number of timesteps
+
+    max_episodes            max number of episodes
+
+    max_iters               maximum number of policy optimization iterations
+
+    callback                function to be called with (locals(), globals()) each policy optimization step
+
+    load_path               str, path to load the model from (default: None, i.e. no model is loaded)
+
+    **network_kwargs        keyword arguments to the policy / network builder. See baselines.common/policies.py/build_policy and arguments to a particular type of network
+
+    Returns:
+    -------
+
+    learnt model
+
+    '''
+
+    if MPI is not None:
+        nworkers = MPI.COMM_WORLD.Get_size()
+        rank = MPI.COMM_WORLD.Get_rank()
+    else:
+        nworkers = 1
+        rank = 0
+
+    cpus_per_worker = 1
+    U.get_session(
+        config=tf.ConfigProto(
+            allow_soft_placement=True,
+            inter_op_parallelism_threads=cpus_per_worker,
+            intra_op_parallelism_threads=cpus_per_worker))
+
+    policy = build_policy(env, network, value_network='copy', **network_kwargs)
+    set_global_seeds(seed)
+
     np.set_printoptions(precision=3)
     # Setup losses and stuff
     # ----------------------------------------
     ob_space = env.observation_space
     ac_space = env.action_space
-    pi = policy_func("pi", ob_space, ac_space)
-    oldpi = policy_func("oldpi", ob_space, ac_space)
+
+    ob = observation_placeholder(ob_space)
+    with tf.variable_scope("pi"):
+        pi = policy(observ_placeholder=ob)
+    with tf.variable_scope("oldpi"):
+        oldpi = policy(observ_placeholder=ob)
+
     atarg = tf.placeholder(
         dtype=tf.float32,
         shape=[None])  # Target advantage function (if applicable)
     ret = tf.placeholder(dtype=tf.float32, shape=[None])  # Empirical return
 
-    ob = U.get_placeholder_cached(name="ob")
     ac = pi.pdtype.sample_placeholder([None])
 
     kloldnew = oldpi.pd.kl(pi.pd)
     ent = pi.pd.entropy()
-    meankl = U.mean(kloldnew)
-    meanent = U.mean(ent)
-    entbonus = entcoeff * meanent
+    meankl = tf.reduce_mean(kloldnew)
+    meanent = tf.reduce_mean(ent)
+    entbonus = ent_coef * meanent
 
-    vferr = U.mean(tf.square(pi.vpred - ret))
+    vferr = tf.reduce_mean(tf.square(pi.vf - ret))
 
     ratio = tf.exp(
         pi.pd.logp(ac) - oldpi.pd.logp(ac))  # advantage * pnew / pold
-    surrgain = U.mean(ratio * atarg)
+    surrgain = tf.reduce_mean(ratio * atarg)
 
     optimgain = surrgain + entbonus
     losses = [optimgain, meankl, entbonus, surrgain, meanent]
@@ -146,13 +219,12 @@ def learn(
 
     dist = meankl
 
-    all_var_list = pi.get_trainable_variables()
-    var_list = [
-        v for v in all_var_list if v.name.split("/")[1].startswith("pol")
-    ]
-    vf_var_list = [
-        v for v in all_var_list if v.name.split("/")[1].startswith("vf")
-    ]
+    all_var_list = get_trainable_variables("pi")
+    # var_list = [v for v in all_var_list if v.name.split("/")[1].startswith("pol")]
+    # vf_var_list = [v for v in all_var_list if v.name.split("/")[1].startswith("vf")]
+    var_list = get_pi_trainable_variables("pi")
+    vf_var_list = get_vf_trainable_variables("pi")
+
     vfadam = MpiAdam(vf_var_list)
 
     get_flat = U.GetFlat(var_list)
@@ -167,8 +239,10 @@ def learn(
         sz = U.intprod(shape)
         tangents.append(tf.reshape(flat_tangent[start:start + sz], shape))
         start += sz
-    gvp = tf.add_n(
-        [U.sum(g * tangent) for (g, tangent) in zipsame(klgrads, tangents)])  # pylint: disable=E1111
+    gvp = tf.add_n([
+        tf.reduce_sum(g * tangent)
+        for (g, tangent) in zipsame(klgrads, tangents)
+    ])  #pylint: disable=E1111
     fvp = U.flatgrad(gvp, var_list)
 
     assign_old_eq_new = U.function(
@@ -176,8 +250,9 @@ def learn(
         updates=[
             tf.assign(oldv, newv)
             for (oldv,
-                 newv) in zipsame(oldpi.get_variables(), pi.get_variables())
+                 newv) in zipsame(get_variables("oldpi"), get_variables("pi"))
         ])
+
     compute_losses = U.function([ob, ac, atarg], losses)
     compute_lossandgrad = U.function(
         [ob, ac, atarg], losses + [U.flatgrad(optimgain, var_list)])
@@ -200,14 +275,23 @@ def learn(
 
     def allmean(x):
         assert isinstance(x, np.ndarray)
-        out = np.empty_like(x)
-        MPI.COMM_WORLD.Allreduce(x, out, op=MPI.SUM)
-        out /= nworkers
+        if MPI is not None:
+            out = np.empty_like(x)
+            MPI.COMM_WORLD.Allreduce(x, out, op=MPI.SUM)
+            out /= nworkers
+        else:
+            out = np.copy(x)
+
         return out
 
     U.initialize()
+    if load_path is not None:
+        pi.load(load_path)
+
     th_init = get_flat()
-    MPI.COMM_WORLD.Bcast(th_init, root=0)
+    if MPI is not None:
+        MPI.COMM_WORLD.Bcast(th_init, root=0)
+
     set_from_flat(th_init)
     vfadam.sync()
     print("Init param sum", th_init.sum(), flush=True)
@@ -224,11 +308,16 @@ def learn(
     lenbuffer = deque(maxlen=40)  # rolling buffer for episode lengths
     rewbuffer = deque(maxlen=40)  # rolling buffer for episode rewards
 
-    assert sum([max_iters > 0, max_timesteps > 0, max_episodes > 0]) == 1
+    if sum([max_iters > 0, total_timesteps > 0, max_episodes > 0]) == 0:
+        # noththing to be done
+        return pi
+
+    assert sum([max_iters>0, total_timesteps>0, max_episodes>0]) < 2, \
+        'out of max_iters, total_timesteps, and max_episodes only one should be specified'
 
     while True:
         if callback: callback(locals(), globals())
-        if max_timesteps and timesteps_so_far >= max_timesteps:
+        if total_timesteps and timesteps_so_far >= total_timesteps:
             break
         elif max_episodes and episodes_so_far >= max_episodes:
             break
@@ -324,7 +413,11 @@ def learn(
                               explained_variance(vpredbefore, tdlamret))
 
         lrlocal = (seg["ep_lens"], seg["ep_rets"])  # local values
-        listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal)  # list of tuples
+        if MPI is not None:
+            listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal)  # list of tuples
+        else:
+            listoflrpairs = [lrlocal]
+
         lens, rews = map(flatten_lists, zip(*listoflrpairs))
         lenbuffer.extend(lens)
         rewbuffer.extend(rews)
@@ -343,6 +436,30 @@ def learn(
         if rank == 0:
             logger.dump_tabular()
 
+    return pi
+
 
 def flatten_lists(listoflists):
     return [el for list_ in listoflists for el in list_]
+
+
+def get_variables(scope):
+    return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope)
+
+
+def get_trainable_variables(scope):
+    return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope)
+
+
+def get_vf_trainable_variables(scope):
+    return [
+        v for v in get_trainable_variables(scope)
+        if 'vf' in v.name[len(scope):].split('/')
+    ]
+
+
+def get_pi_trainable_variables(scope):
+    return [
+        v for v in get_trainable_variables(scope)
+        if 'pi' in v.name[len(scope):].split('/')
+    ]

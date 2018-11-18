@@ -9,6 +9,7 @@ from baselines import deepq, logger
 from baselines.common.schedules import LinearSchedule
 import baselines.common.tf_util as U
 from baselines.deepq.replay_buffer import ReplayBuffer
+from baselines.deepq.utils import ObservationInput
 
 
 def model(inpt, num_actions, scope, reuse=False):
@@ -29,7 +30,7 @@ if __name__ == '__main__':
         # Create all the functions necessary to train the model
         act, train, update_target, debug = deepq.build_train(
             make_obs_ph=
-            lambda name: U.BatchInput(env.observation_space.shape, name=name),
+            lambda name: ObservationInput(env.observation_space, name=name),
             q_func=model,
             num_actions=env.action_space.n,
             optimizer=tf.train.AdamOptimizer(learning_rate=5e-4),

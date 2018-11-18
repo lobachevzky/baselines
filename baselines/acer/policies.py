@@ -1,7 +1,8 @@
 import numpy as np
 import tensorflow as tf
 
-from baselines.a2c.utils import batch_to_seq, conv, conv_to_fc, fc, lstm, sample, seq_to_batch
+from baselines.a2c.utils import batch_to_seq, fc, lstm, sample, seq_to_batch
+from baselines.common.policies import nature_cnn
 
 
 class AcerCnnPolicy(object):
@@ -19,26 +20,19 @@ class AcerCnnPolicy(object):
         nact = ac_space.n
         X = tf.placeholder(tf.uint8, ob_shape)  # obs
         with tf.variable_scope("model", reuse=reuse):
-            h = conv(
-                tf.cast(X, tf.float32) / 255.,
-                'c1',
-                nf=32,
-                rf=8,
-                stride=4,
-                init_scale=np.sqrt(2))
-            h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
-            h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
-            h3 = conv_to_fc(h3)
-            h4 = fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2))
-            pi_logits = fc(h4, 'pi', nact, act=lambda x: x, init_scale=0.01)
+            h = nature_cnn(X)
+            pi_logits = fc(h, 'pi', nact, init_scale=0.01)
             pi = tf.nn.softmax(pi_logits)
-            q = fc(h4, 'q', nact, act=lambda x: x)
+            q = fc(h, 'q', nact)
 
-        a = sample(pi_logits)  # could change this to use self.pi instead
+        a = sample(tf.nn.softmax(
+            pi_logits))  # could change this to use self.pi instead
         self.initial_state = []  # not stateful
         self.X = X
         self.pi = pi  # actual policy params now
+        self.pi_logits = pi_logits
         self.q = q
+        self.vf = q
 
         def step(ob, *args, **kwargs):
             # returns actions, mus, states
@@ -72,30 +66,20 @@ class AcerLstmPolicy(object):
         ob_shape = (nbatch, nh, nw, nc * nstack)
         nact = ac_space.n
         X = tf.placeholder(tf.uint8, ob_shape)  # obs
-        M = tf.placeholder(tf.float32, [nbatch])  # mask (done t-1)
-        S = tf.placeholder(tf.float32, [nenv, nlstm * 2])  # states
+        M = tf.placeholder(tf.float32, [nbatch])  #mask (done t-1)
+        S = tf.placeholder(tf.float32, [nenv, nlstm * 2])  #states
         with tf.variable_scope("model", reuse=reuse):
-            h = conv(
-                tf.cast(X, tf.float32) / 255.,
-                'c1',
-                nf=32,
-                rf=8,
-                stride=4,
-                init_scale=np.sqrt(2))
-            h2 = conv(h, 'c2', nf=64, rf=4, stride=2, init_scale=np.sqrt(2))
-            h3 = conv(h2, 'c3', nf=64, rf=3, stride=1, init_scale=np.sqrt(2))
-            h3 = conv_to_fc(h3)
-            h4 = fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2))
+            h = nature_cnn(X)
 
             # lstm
-            xs = batch_to_seq(h4, nenv, nsteps)
+            xs = batch_to_seq(h, nenv, nsteps)
             ms = batch_to_seq(M, nenv, nsteps)
             h5, snew = lstm(xs, ms, S, 'lstm1', nh=nlstm)
             h5 = seq_to_batch(h5)
 
-            pi_logits = fc(h5, 'pi', nact, act=lambda x: x, init_scale=0.01)
+            pi_logits = fc(h5, 'pi', nact, init_scale=0.01)
             pi = tf.nn.softmax(pi_logits)
-            q = fc(h5, 'q', nact, act=lambda x: x)
+            q = fc(h5, 'q', nact)
 
         a = sample(pi_logits)  # could change this to use self.pi instead
         self.initial_state = np.zeros((nenv, nlstm * 2), dtype=np.float32)

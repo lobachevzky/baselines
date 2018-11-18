@@ -75,13 +75,19 @@ class EzPickle(object):
 
 def set_global_seeds(i):
     try:
+        import MPI
+        rank = MPI.COMM_WORLD.Get_rank()
+    except ImportError:
+        rank = 0
+
+    myseed = i + 1000 * rank if i is not None else None
+    try:
         import tensorflow as tf
+        tf.set_random_seed(myseed)
     except ImportError:
         pass
-    else:
-        tf.set_random_seed(i)
-    np.random.seed(i)
-    random.seed(i)
+    np.random.seed(myseed)
+    random.seed(myseed)
 
 
 def pretty_eta(seconds_left):
@@ -238,6 +244,7 @@ def relatively_safe_pickle_dump(obj, path, compression=False):
         # Using gzip here would be simpler, but the size is limited to 2GB
         with tempfile.NamedTemporaryFile() as uncompressed_file:
             pickle.dump(obj, uncompressed_file)
+            uncompressed_file.file.flush()
             with zipfile.ZipFile(
                     temp_storage, "w",
                     compression=zipfile.ZIP_DEFLATED) as myzip:

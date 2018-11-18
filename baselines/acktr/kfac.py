@@ -1,6 +1,9 @@
 from functools import reduce
 import re
 
+import numpy as np
+import tensorflow as tf
+
 from baselines.acktr.kfac_utils import *
 
 KFAC_OPS = ['MatMul', 'Conv2D', 'BiasAdd']
@@ -17,7 +20,7 @@ class KfacOptimizer():
                  full_stats_init=False,
                  cold_iter=100,
                  cold_lr=None,
-                 async=False,
+                 is_async=False,
                  async_stats=False,
                  epsilon=1e-2,
                  stats_decay=0.95,
@@ -34,7 +37,7 @@ class KfacOptimizer():
         self._clip_kl = clip_kl
         self._channel_fac = channel_fac
         self._kfac_update = kfac_update
-        self._async = async
+        self._async = is_async
         self._async_stats = async_stats
         self._epsilon = epsilon
         self._stats_decay = stats_decay
@@ -656,8 +659,8 @@ class KfacOptimizer():
                         copied_list.append(None)
                 return copied_list
 
-            # stats = [copyStats(self.fStats), copyStats(self.bStats)]
-            # stats = [self.fStats, self.bStats]
+            #stats = [copyStats(self.fStats), copyStats(self.bStats)]
+            #stats = [self.fStats, self.bStats]
 
             stats_eigen = self.stats_eigen
             computedEigen = {}
@@ -866,7 +869,7 @@ class KfacOptimizer():
                     grad = gmatmul(grad, Q, transpose_b=True, reduce_dim=idx)
                 ##
 
-                # grad = tf.Print(grad, [tf.convert_to_tensor('3'), tf.convert_to_tensor(var.name), grad.get_shape()])
+                #grad = tf.Print(grad, [tf.convert_to_tensor('3'), tf.convert_to_tensor(var.name), grad.get_shape()])
                 if (self.stats[var]['assnBias'] is
                         not None) and not self._blockdiag_bias:
                     # use homogeneous coordinates only works for 2D grad.
@@ -1009,7 +1012,7 @@ class KfacOptimizer():
                     optim = tf.train.MomentumOptimizer(
                         self._lr * (1. - self._momentum), self._momentum)
 
-                    # optim = tf.train.AdamOptimizer(self._lr, epsilon=0.01)
+                    #optim = tf.train.AdamOptimizer(self._lr, epsilon=0.01)
 
                     def optimOp():
                         def updateOptimOp():

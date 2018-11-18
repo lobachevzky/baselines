@@ -1,3 +1,8 @@
+import os
+import re
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 _atari7 = [
     'BeamRider', 'Breakout', 'Enduro', 'Pong', 'Qbert', 'Seaquest',
     'SpaceInvaders'
@@ -9,12 +14,20 @@ _atariexpl7 = [
 
 _BENCHMARKS = []
 
+remove_version_re = re.compile(r'-v\d+$')
+
 
 def register_benchmark(benchmark):
     for b in _BENCHMARKS:
         if b['name'] == benchmark['name']:
             raise ValueError(
                 'Benchmark with name %s already registered!' % b['name'])
+
+    # automatically add a description if it is not present
+    if 'tasks' in benchmark:
+        for t in benchmark['tasks']:
+            if 'desc' not in t:
+                t['desc'] = remove_version_re.sub('', t['env_id'])
     _BENCHMARKS.append(benchmark)
 
 
@@ -53,6 +66,7 @@ register_benchmark({
     'description':
     '7 Atari games from Mnih et al. (2013), with pixel observations, 50M timesteps',
     'tasks': [{
+        'desc': _game,
         'env_id': _game + _ATARI_SUFFIX,
         'trials': 2,
         'num_timesteps': int(50e6)
@@ -65,8 +79,9 @@ register_benchmark({
     'description':
     '7 Atari games from Mnih et al. (2013), with pixel observations, 10M timesteps',
     'tasks': [{
+        'desc': _game,
         'env_id': _game + _ATARI_SUFFIX,
-        'trials': 2,
+        'trials': 6,
         'num_timesteps': int(10e6)
     } for _game in _atari7]
 })
@@ -77,6 +92,7 @@ register_benchmark({
     'description':
     '7 Atari games from Mnih et al. (2013), with pixel observations, 1 hour of walltime',
     'tasks': [{
+        'desc': _game,
         'env_id': _game + _ATARI_SUFFIX,
         'trials': 2,
         'num_seconds': 60 * 60
@@ -89,6 +105,7 @@ register_benchmark({
     'description':
     '7 Atari games emphasizing exploration, with pixel observations, 10M timesteps',
     'tasks': [{
+        'desc': _game,
         'env_id': _game + _ATARI_SUFFIX,
         'trials': 2,
         'num_timesteps': int(10e6)
@@ -98,8 +115,8 @@ register_benchmark({
 # MuJoCo
 
 _mujocosmall = [
-    'InvertedDoublePendulum-v1', 'InvertedPendulum-v1', 'HalfCheetah-v1',
-    'Hopper-v1', 'Walker2d-v1', 'Reacher-v1', 'Swimmer-v1'
+    'InvertedDoublePendulum-v2', 'InvertedPendulum-v2', 'HalfCheetah-v2',
+    'Hopper-v2', 'Walker2d-v2', 'Reacher-v2', 'Swimmer-v2'
 ]
 register_benchmark({
     'name':
@@ -108,10 +125,11 @@ register_benchmark({
     'Some small 2D MuJoCo tasks, run for 1M timesteps',
     'tasks': [{
         'env_id': _envid,
-        'trials': 3,
+        'trials': 6,
         'num_timesteps': int(1e6)
     } for _envid in _mujocosmall]
 })
+
 register_benchmark({
     'name':
     'MujocoWalkers',
@@ -134,6 +152,25 @@ register_benchmark({
             'num_timesteps': 100 * 1000000
         },
     ]
+})
+
+# Bullet
+_bulletsmall = [
+    'InvertedDoublePendulum', 'InvertedPendulum', 'HalfCheetah', 'Reacher',
+    'Walker2D', 'Hopper', 'Ant'
+]
+_bulletsmall = [e + 'BulletEnv-v0' for e in _bulletsmall]
+
+register_benchmark({
+    'name':
+    'Bullet1M',
+    'description':
+    '6 mujoco-like tasks from bullet, 1M steps',
+    'tasks': [{
+        'env_id': e,
+        'trials': 6,
+        'num_timesteps': int(1e6)
+    } for e in _bulletsmall]
 })
 
 # Roboschool
@@ -253,8 +290,20 @@ register_benchmark({
     'description':
     '47 Atari games from Mnih et al. (2013), with pixel observations, 10M timesteps',
     'tasks': [{
+        'desc': _game,
         'env_id': _game + _ATARI_SUFFIX,
         'trials': 2,
         'num_timesteps': int(10e6)
     } for _game in _atari50]
+})
+
+# HER DDPG
+
+register_benchmark({
+    'name': 'HerDdpg',
+    'description': 'Smoke-test only benchmark of HER',
+    'tasks': [{
+        'trials': 1,
+        'env_id': 'FetchReach-v1'
+    }]
 })

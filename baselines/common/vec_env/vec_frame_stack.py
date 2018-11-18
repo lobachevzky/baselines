@@ -1,38 +1,24 @@
 from gym import spaces
 import numpy as np
 
-from baselines.common.vec_env import VecEnv
+# local
+from . import VecEnvWrapper
 
 
-class VecFrameStack(VecEnv):
-    """
-    Vectorized environment base class
-    """
-
+class VecFrameStack(VecEnvWrapper):
     def __init__(self, venv, nstack):
         self.venv = venv
         self.nstack = nstack
         wos = venv.observation_space  # wrapped ob space
-        if isinstance(wos, spaces.Box):
-            low = np.repeat(wos.low, self.nstack, axis=-1)
-            high = np.repeat(wos.high, self.nstack, axis=-1)
-            self.stackedobs = np.zeros((venv.num_envs, ) + low.shape,
-                                       low.dtype)
-            self._observation_space = spaces.Box(low=low, high=high)
-        elif isinstance(wos, spaces.Discrete):
-            self._observation_space = spaces.Discrete(wos.n * self.nstack)
-            self.stackedobs = np.zeros(venv.num_envs)
+        low = np.repeat(wos.low, self.nstack, axis=-1)
+        high = np.repeat(wos.high, self.nstack, axis=-1)
+        self.stackedobs = np.zeros((venv.num_envs, ) + low.shape, low.dtype)
+        observation_space = spaces.Box(
+            low=low, high=high, dtype=venv.observation_space.dtype)
+        VecEnvWrapper.__init__(self, venv, observation_space=observation_space)
 
-        self._action_space = venv.action_space
-
-    def step(self, vac):
-        """
-        Apply sequence of actions to sequence of environments
-        actions -> (observations, rewards, news)
-
-        where 'news' is a boolean vector indicating whether each element is new.
-        """
-        obs, rews, news, infos = self.venv.step(vac)
+    def step_wait(self):
+        obs, rews, news, infos = self.venv.step_wait()
         self.stackedobs = np.roll(self.stackedobs, shift=-1, axis=-1)
         for (i, new) in enumerate(news):
             if new:
@@ -41,25 +27,7 @@ class VecFrameStack(VecEnv):
         return self.stackedobs, rews, news, infos
 
     def reset(self):
-        """
-        Reset all environments
-        """
         obs = self.venv.reset()
         self.stackedobs[...] = 0
         self.stackedobs[..., -obs.shape[-1]:] = obs
         return self.stackedobs
-
-    @property
-    def action_space(self):
-        return self._action_space
-
-    @property
-    def observation_space(self):
-        return self._observation_space
-
-    def close(self):
-        self.venv.close()
-
-    @property
-    def num_envs(self):
-        return self.venv.num_envs

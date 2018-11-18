@@ -1,4 +1,8 @@
-from mpi4py import MPI
+try:
+    from mpi4py import MPI
+except ImportError:
+    MPI = None
+
 import numpy as np
 import tensorflow as tf
 
@@ -56,7 +60,8 @@ class RunningMeanStd(object):
             np.square(x).sum(axis=0).ravel(),
             np.array([len(x)], dtype='float64')
         ])
-        MPI.COMM_WORLD.Allreduce(addvec, totalvec, op=MPI.SUM)
+        if MPI is not None:
+            MPI.COMM_WORLD.Allreduce(addvec, totalvec, op=MPI.SUM)
         self.incfiltparams(totalvec[0:n].reshape(self.shape),
                            totalvec[n:2 * n].reshape(self.shape),
                            totalvec[2 * n])
@@ -68,6 +73,7 @@ def test_runningmeanstd():
         (np.random.randn(3), np.random.randn(4), np.random.randn(5)),
         (np.random.randn(3, 2), np.random.randn(4, 2), np.random.randn(5, 2)),
     ]:
+
         rms = RunningMeanStd(epsilon=0.0, shape=x1.shape[1:])
         U.initialize()
 
@@ -76,7 +82,7 @@ def test_runningmeanstd():
         rms.update(x1)
         rms.update(x2)
         rms.update(x3)
-        ms2 = U.eval([rms.mean, rms.std])
+        ms2 = [rms.mean.eval(), rms.std.eval()]
 
         assert np.allclose(ms1, ms2)
 
@@ -114,8 +120,14 @@ def test_dist():
         print(x, y)
         return np.allclose(x, y)
 
-    assert checkallclose(bigvec.mean(axis=0), U.eval(rms.mean))
-    assert checkallclose(bigvec.std(axis=0), U.eval(rms.std))
+    assert checkallclose(
+        bigvec.mean(axis=0),
+        rms.mean.eval(),
+    )
+    assert checkallclose(
+        bigvec.std(axis=0),
+        rms.std.eval(),
+    )
 
 
 if __name__ == "__main__":

@@ -11,19 +11,15 @@ def sample(logits):
 
 
 def cat_entropy(logits):
-    a0 = logits - tf.reduce_max(logits, 1, keep_dims=True)
+    a0 = logits - tf.reduce_max(logits, 1, keepdims=True)
     ea0 = tf.exp(a0)
-    z0 = tf.reduce_sum(ea0, 1, keep_dims=True)
+    z0 = tf.reduce_sum(ea0, 1, keepdims=True)
     p0 = ea0 / z0
     return tf.reduce_sum(p0 * (tf.log(z0) - a0), 1)
 
 
 def cat_entropy_softmax(p0):
     return -tf.reduce_sum(p0 * tf.log(p0 + 1e-6), axis=1)
-
-
-def mse(pred, target):
-    return tf.square(pred - target) / 2.
 
 
 def ortho_init(scale=1.0):
@@ -45,28 +41,47 @@ def ortho_init(scale=1.0):
     return _ortho_init
 
 
-def conv(x, scope, nf, rf, stride, pad='VALID', act=tf.nn.relu,
-         init_scale=1.0):
+def conv(x,
+         scope,
+         *,
+         nf,
+         rf,
+         stride,
+         pad='VALID',
+         init_scale=1.0,
+         data_format='NHWC',
+         one_dim_bias=False):
+    if data_format == 'NHWC':
+        channel_ax = 3
+        strides = [1, stride, stride, 1]
+        bshape = [1, 1, 1, nf]
+    elif data_format == 'NCHW':
+        channel_ax = 1
+        strides = [1, 1, stride, stride]
+        bshape = [1, nf, 1, 1]
+    else:
+        raise NotImplementedError
+    bias_var_shape = [nf] if one_dim_bias else [1, nf, 1, 1]
+    nin = x.get_shape()[channel_ax].value
+    wshape = [rf, rf, nin, nf]
     with tf.variable_scope(scope):
-        nin = x.get_shape()[3].value
-        w = tf.get_variable(
-            "w", [rf, rf, nin, nf], initializer=ortho_init(init_scale))
+        w = tf.get_variable("w", wshape, initializer=ortho_init(init_scale))
         b = tf.get_variable(
-            "b", [nf], initializer=tf.constant_initializer(0.0))
-        z = tf.nn.conv2d(x, w, strides=[1, stride, stride, 1], padding=pad) + b
-        h = act(z)
-        return h
+            "b", bias_var_shape, initializer=tf.constant_initializer(0.0))
+        if not one_dim_bias and data_format == 'NHWC':
+            b = tf.reshape(b, bshape)
+        return tf.nn.conv2d(
+            x, w, strides=strides, padding=pad, data_format=data_format) + b
 
 
-def fc(x, scope, nh, act=tf.nn.relu, init_scale=1.0):
+def fc(x, scope, nh, *, init_scale=1.0, init_bias=0.0):
     with tf.variable_scope(scope):
         nin = x.get_shape()[1].value
         w = tf.get_variable("w", [nin, nh], initializer=ortho_init(init_scale))
         b = tf.get_variable(
-            "b", [nh], initializer=tf.constant_initializer(0.0))
-        z = tf.matmul(x, w) + b
-        h = act(z)
-        return h
+            "b", [nh], initializer=tf.constant_initializer(init_bias))
+        return tf.matmul(x, w) + b
+
 
 
 def batch_to_seq(h, nbatch, nsteps, flat=False):
@@ -92,7 +107,6 @@ def seq_to_batch(h, flat=False):
 
 def lstm(xs, ms, s, scope, nh, init_scale=1.0):
     nbatch, nin = [v.value for v in xs[0].get_shape()]
-    nsteps = len(xs)
     with tf.variable_scope(scope):
         wx = tf.get_variable(
             "wx", [nin, nh * 4], initializer=ortho_init(init_scale))
@@ -127,7 +141,6 @@ def _ln(x, g, b, e=1e-5, axes=[1]):
 
 def lnlstm(xs, ms, s, scope, nh, init_scale=1.0):
     nbatch, nin = [v.value for v in xs[0].get_shape()]
-    nsteps = len(xs)
     with tf.variable_scope(scope):
         wx = tf.get_variable(
             "wx", [nin, nh * 4], initializer=ortho_init(init_scale))
@@ -184,8 +197,8 @@ def discount_with_dones(rewards, dones, gamma):
 
 
 def find_trainable_variables(key):
-    with tf.variable_scope(key):
-        return tf.trainable_variables()
+    return tf.trainable_variables(key)
+
 
 
 def make_path(f):
@@ -200,7 +213,38 @@ def linear(p):
     return 1 - p
 
 
-schedules = {'linear': linear, 'constant': constant}
+def middle_drop(p):
+    eps = 0.75
+    if 1 - p < eps:
+        return eps * 0.1
+    return 1 - p
+
+
+def double_linear_con(p):
+    p *= 2
+    eps = 0.125
+    if 1 - p < eps:
+        return eps
+    return 1 - p
+
+
+def double_middle_drop(p):
+    eps1 = 0.75
+    eps2 = 0.25
+    if 1 - p < eps1:
+        if 1 - p < eps2:
+            return eps2 * 0.5
+        return eps1 * 0.1
+    return 1 - p
+
+
+schedules = {
+    'linear': linear,
+    'constant': constant,
+    'double_linear_con': double_linear_con,
+    'middle_drop': middle_drop,
+    'double_middle_drop': double_middle_drop
+}
 
 
 class Scheduler(object):

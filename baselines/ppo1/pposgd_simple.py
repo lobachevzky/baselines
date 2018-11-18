@@ -95,7 +95,7 @@ def add_vtarg_and_adv(seg, gamma, lam):
 
 def learn(
         env,
-        policy_func,
+        policy_fn,
         *,
         timesteps_per_actorbatch,  # timesteps per actor per update
         clip_param,
@@ -117,9 +117,9 @@ def learn(
     # ----------------------------------------
     ob_space = env.observation_space
     ac_space = env.action_space
-    pi = policy_func("pi", ob_space,
-                     ac_space)  # Construct network for new policy
-    oldpi = policy_func("oldpi", ob_space, ac_space)  # Network for old policy
+    pi = policy_fn("pi", ob_space,
+                   ac_space)  # Construct network for new policy
+    oldpi = policy_fn("oldpi", ob_space, ac_space)  # Network for old policy
     atarg = tf.placeholder(
         dtype=tf.float32,
         shape=[None])  # Target advantage function (if applicable)
@@ -135,16 +135,17 @@ def learn(
 
     kloldnew = oldpi.pd.kl(pi.pd)
     ent = pi.pd.entropy()
-    meankl = U.mean(kloldnew)
-    meanent = U.mean(ent)
+    meankl = tf.reduce_mean(kloldnew)
+    meanent = tf.reduce_mean(ent)
     pol_entpen = (-entcoeff) * meanent
 
     ratio = tf.exp(pi.pd.logp(ac) - oldpi.pd.logp(ac))  # pnew / pold
     surr1 = ratio * atarg  # surrogate from conservative policy iteration
-    surr2 = U.clip(ratio, 1.0 - clip_param, 1.0 + clip_param) * atarg  #
-    pol_surr = -U.mean(tf.minimum(
+    surr2 = tf.clip_by_value(ratio, 1.0 - clip_param,
+                             1.0 + clip_param) * atarg  #
+    pol_surr = -tf.reduce_mean(tf.minimum(
         surr1, surr2))  # PPO's pessimistic surrogate (L^CLIP)
-    vf_loss = U.mean(tf.square(pi.vpred - ret))
+    vf_loss = tf.reduce_mean(tf.square(pi.vpred - ret))
     total_loss = pol_surr + pol_entpen + vf_loss
     losses = [pol_surr, pol_entpen, vf_loss, meankl, meanent]
     loss_names = ["pol_surr", "pol_entpen", "vf_loss", "kl", "ent"]
@@ -263,6 +264,8 @@ def learn(
         logger.record_tabular("TimeElapsed", time.time() - tstart)
         if MPI.COMM_WORLD.Get_rank() == 0:
             logger.dump_tabular()
+
+    return pi
 
 
 def flatten_lists(listoflists):

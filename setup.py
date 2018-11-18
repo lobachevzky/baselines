@@ -1,11 +1,29 @@
+from distutils.version import StrictVersion
+import re
 import sys
 
+# ensure there is some tensorflow build with version above 1.4
+import pkg_resources
 from setuptools import find_packages, setup
 
 if sys.version_info.major != 3:
-    print("This Python is only compatible with Python 3, but you are running "
-          "Python {}. The installation will likely fail.".format(
+    print('This Python is only compatible with Python 3, but you are running '
+          'Python {}. The installation will likely fail.'.format(
               sys.version_info.major))
+
+extras = {
+    'test': ['filelock', 'pytest', 'pytest-forked', 'atari-py'],
+    'bullet': [
+        'pybullet',
+    ],
+    'mpi': ['mpi4py']
+}
+
+all_deps = []
+for group_name in extras:
+    all_deps += extras[group_name]
+
+extras['all'] = all_deps
 
 setup(
     name='baselines',
@@ -14,19 +32,26 @@ setup(
         if package.startswith('baselines')
     ],
     install_requires=[
-        'gym[mujoco,atari,classic_control]',
-        'scipy',
-        'tqdm',
-        'joblib',
-        'zmq',
-        'dill',
-        'azure==1.0.3',
-        'progressbar2',
-        'mpi4py',
+        'gym', 'scipy', 'tqdm', 'joblib', 'dill', 'progressbar2',
+        'cloudpickle', 'click', 'opencv-python'
     ],
+    entry_points=dict(console_scripts=[
+        'hsr=baselines.ppo2.run_hsr:cli',
+    ]),
+    extras_require=extras,
     description=
-    "OpenAI baselines: high quality implementations of reinforcement learning algorithms",
-    author="OpenAI",
+    'OpenAI baselines: high quality implementations of reinforcement learning algorithms',
+    author='OpenAI',
     url='https://github.com/openai/baselines',
-    author_email="gym@openai.com",
-    version="0.1.4")
+    author_email='gym@openai.com',
+    version='0.1.5')
+
+tf_pkg = None
+for tf_pkg_name in ['tensorflow', 'tensorflow-gpu']:
+    try:
+        tf_pkg = pkg_resources.get_distribution(tf_pkg_name)
+    except pkg_resources.DistributionNotFound:
+        pass
+assert tf_pkg is not None, 'TensorFlow needed, of version above 1.4'
+assert StrictVersion(re.sub(r'-?rc\d+$', '',
+                            tf_pkg.version)) >= StrictVersion('1.4.0')
