@@ -74,29 +74,15 @@ class UnsupervisedVecEnv(SubprocVecEnv):
     def __init__(self, env_fns, reward_params: tf.Tensor):
         super().__init__(env_fns)
         self.params = reward_params
+        self.sess = get_session()
 
-    def step(self, actions):
-        super().step(StepData(actions=actions,
-                              reward_params=self.params))
+    def step_async(self, actions):
+        params = self.sess.run(self.params)
+        super().step_async([
+            StepData(actions=action, reward_params=params)
+            for action in actions
+        ])
 
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
-    def __init__(self, env_fns, reward_params: tf.Tensor):
-        super().__init__(env_fns)
-        self.params = reward_params
-        self.unwrapped_envs = [
-            unwrap_env(env, lambda e: isinstance(e, UnsupervisedEnv))
-            for env in self.envs
-        ]
-
-    def step(self, actions):
-        super().step(StepData(actions=actions,
-                              reward_params=self.params))
-    #
-    # @property
-    # def param_shape(self):
-    #     return self.unwrapped_envs[0].param_shape
-    #
-    # @property
-    # def raw_observation_space(self):
-    #     return self.unwrapped_envs[0].raw_observation_space
+    pass
