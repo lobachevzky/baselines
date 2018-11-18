@@ -8,7 +8,6 @@ matplotlib.use('TkAgg')  # Can change to 'Agg' for non-interactive mode
 
 plt.rcParams['svg.fonttype'] = 'none'
 
-
 X_TIMESTEPS = 'timesteps'
 X_EPISODES = 'episodes'
 X_WALLTIME = 'walltime_hrs'

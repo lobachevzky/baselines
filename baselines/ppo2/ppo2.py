@@ -21,7 +21,6 @@ except ImportError:
     MPI = None
 
 
-
 class Model(object):
     """
     We use this object to :
