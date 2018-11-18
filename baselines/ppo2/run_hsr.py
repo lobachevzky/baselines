@@ -4,7 +4,6 @@ import argparse
 import multiprocessing
 
 # third party
-from environments.hsr import Observation
 from gym.wrappers import TimeLimit
 import numpy as np
 from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, parse_activation, parse_groups
@@ -20,7 +19,7 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
-from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedVecEnv
+from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedVecEnv, Observation
 
 
 def parse_lr(string: str) -> callable:
@@ -30,12 +29,13 @@ def parse_lr(string: str) -> callable:
 class RewardStructure:
     def __init__(self, subspace_sizes):
         self.subspace_sizes = subspace_sizes
-        param_shape = [Observation(*subspace_sizes).goal]
+        param_shape = [Observation(*subspace_sizes).achieved]
         with tf.variable_scope('reward'):
             self.params = tf.get_variable('params', shape=param_shape)
 
     def function(self, X: tf.Tensor):
-        achieved = Observation(*tf.split(X, self.subspace_sizes, axis=1)).goal
+        achieved = Observation(
+            *tf.split(X, self.subspace_sizes, axis=1)).achieved
         return -tf.reduce_sum(tf.square(achieved - self.params))
 
 
@@ -69,6 +69,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
             subspace_sizes=sample_env.subspace_sizes)
         env = UnsupervisedVecEnv([make_env for _ in range(ncpu)],
                                  reward_params=reward_structure.params)
+
         # env = UnsupervisedDummyVecEnv([make_env],
         #                               reward_params=reward_structure.params)
 

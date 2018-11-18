@@ -27,12 +27,15 @@ class HSREnv(hsr.HSREnv):
     def reset(self):
         return vectorize(super().reset())
 
+
 StepData = namedtuple('StepData', 'actions reward_params')
+Observation = namedtuple('Observation', 'observation achieved')
+
 
 class UnsupervisedEnv(hsr.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        spaces = hsr.Observation(*self.observation_space.spaces)
+        spaces = Observation(*self.observation_space.spaces)
 
         # subspace_sizes used for splitting concatenated tensor observations
         self.subspace_sizes = [space_shape(space)[0] for space in spaces]
