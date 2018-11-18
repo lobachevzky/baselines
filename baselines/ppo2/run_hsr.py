@@ -2,11 +2,9 @@
 import argparse
 import multiprocessing
 
+from gym.wrappers import TimeLimit
 import numpy as np
 import tensorflow as tf
-from gym.wrappers import TimeLimit
-from scripts.hsr import env_wrapper, ACTIVATIONS, parse_activation, \
-    add_wrapper_args, add_env_args, parse_groups
 
 from baselines import bench, logger
 from baselines.common import set_global_seeds
@@ -15,6 +13,7 @@ from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
 from baselines.ppo2.hsr_wrapper import HSREnv, MoveGripperEnv
+from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, parse_activation, parse_groups
 
 
 def parse_lr(string: str) -> callable:

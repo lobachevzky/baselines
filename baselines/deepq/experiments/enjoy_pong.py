@@ -1,4 +1,5 @@
 import gym
+
 from baselines import deepq
 
 
@@ -11,8 +12,7 @@ def main():
         convs=[(32, 8, 4), (64, 4, 2), (64, 3, 1)],
         hiddens=[256],
         dueling=True,
-        total_timesteps=0
-    )
+        total_timesteps=0)
 
     while True:
         obs, done = env.reset(), False

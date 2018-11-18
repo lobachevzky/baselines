@@ -1,10 +1,12 @@
-import tensorflow as tf
-import numpy as np
 from gym.spaces import np_random
+import numpy as np
+import tensorflow as tf
+
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 
 N_TRIALS = 10000
 N_EPISODES = 100
+
 
 def simple_test(env_fn, learn_fn, min_reward_fraction, n_trials=N_TRIALS):
     np.random.seed(0)
@@ -12,8 +14,8 @@ def simple_test(env_fn, learn_fn, min_reward_fraction, n_trials=N_TRIALS):
 
     env = DummyVecEnv([env_fn])
 
-
-    with tf.Graph().as_default(), tf.Session(config=tf.ConfigProto(allow_soft_placement=True)).as_default():
+    with tf.Graph().as_default(), tf.Session(
+            config=tf.ConfigProto(allow_soft_placement=True)).as_default():
         tf.set_random_seed(0)
 
         model = learn_fn(env)
@@ -39,11 +41,14 @@ def simple_test(env_fn, learn_fn, min_reward_fraction, n_trials=N_TRIALS):
             'sum of rewards {} is less than {} of the total number of trials {}'.format(sum_rew, min_reward_fraction, n_trials)
 
 
-
-def reward_per_episode_test(env_fn, learn_fn, min_avg_reward, n_trials=N_EPISODES):
+def reward_per_episode_test(env_fn,
+                            learn_fn,
+                            min_avg_reward,
+                            n_trials=N_EPISODES):
     env = DummyVecEnv([env_fn])
 
-    with tf.Graph().as_default(), tf.Session(config=tf.ConfigProto(allow_soft_placement=True)).as_default():
+    with tf.Graph().as_default(), tf.Session(
+            config=tf.ConfigProto(allow_soft_placement=True)).as_default():
         model = learn_fn(env)
 
         N_TRIALS = 100
@@ -55,6 +60,7 @@ def reward_per_episode_test(env_fn, learn_fn, min_avg_reward, n_trials=N_EPISODE
         print("Average reward in {} episodes is {}".format(n_trials, avg_rew))
         assert avg_rew > min_avg_reward, \
             'average reward in {} episodes ({}) is less than {}'.format(n_trials, avg_rew, min_avg_reward)
+
 
 def rollout(env, model, n_trials):
     rewards = []
@@ -72,7 +78,7 @@ def rollout(env, model, n_trials):
             if state is not None:
                 a, v, state, _ = model.step(obs, S=state, M=[False])
             else:
-                a,v, _, _ = model.step(obs)
+                a, v, _, _ = model.step(obs)
 
             obs, rew, done, _ = env.step(a)
 
@@ -88,4 +94,3 @@ def rollout(env, model, n_trials):
         observations.append(episode_obs)
 
     return observations, actions, rewards
-

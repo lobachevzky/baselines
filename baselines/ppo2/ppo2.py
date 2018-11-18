@@ -1,15 +1,17 @@
-import os
-import time
-import functools
-import numpy as np
-import os.path as osp
-import tensorflow as tf
-from baselines import logger
 from collections import deque
+import functools
+import os
+import os.path as osp
+import time
+
+import numpy as np
+import tensorflow as tf
+
+from baselines import logger
 from baselines.common import explained_variance, set_global_seeds
 from baselines.common.policies import build_policy
 from baselines.common.runners import AbstractEnvRunner
-from baselines.common.tf_util import get_session, save_variables, load_variables
+from baselines.common.tf_util import get_session, initialize, load_variables, save_variables
 
 try:
     from baselines.common.mpi_adam_optimizer import MpiAdamOptimizer
@@ -18,7 +20,6 @@ try:
 except ImportError:
     MPI = None
 
-from baselines.common.tf_util import initialize
 
 
 class Model(object):
@@ -71,8 +72,8 @@ class Model(object):
         # Clip the value to reduce variability during Critic training
         # Get the predicted value
         vpred = train_model.vf
-        vpredclipped = OLDVPRED + tf.clip_by_value(train_model.vf - OLDVPRED, - CLIPRANGE,
-                                                   CLIPRANGE)
+        vpredclipped = OLDVPRED + tf.clip_by_value(train_model.vf - OLDVPRED,
+                                                   -CLIPRANGE, CLIPRANGE)
         # Unclipped value
         vf_losses1 = tf.square(vpred - R)
         # Clipped value
@@ -86,12 +87,14 @@ class Model(object):
         # Defining Loss = - J is equivalent to max J
         pg_losses = -ADV * ratio
 
-        pg_losses2 = -ADV * tf.clip_by_value(ratio, 1.0 - CLIPRANGE, 1.0 + CLIPRANGE)
+        pg_losses2 = -ADV * tf.clip_by_value(ratio, 1.0 - CLIPRANGE,
+                                             1.0 + CLIPRANGE)
 
         # Final PG loss
         pg_loss = tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
-        clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
+        clipfrac = tf.reduce_mean(
+            tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
 
         # Total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
@@ -101,7 +104,8 @@ class Model(object):
         params = tf.trainable_variables('ppo2_model')
         # 2. Build our trainer
         if MPI is not None:
-            trainer = MpiAdamOptimizer(MPI.COMM_WORLD, learning_rate=LR, epsilon=1e-5)
+            trainer = MpiAdamOptimizer(
+                MPI.COMM_WORLD, learning_rate=LR, epsilon=1e-5)
         else:
             trainer = tf.train.AdamOptimizer(learning_rate=LR, epsilon=1e-5)
         # 3. Calculate the gradients
@@ -117,7 +121,14 @@ class Model(object):
 
         _train = trainer.apply_gradients(grads_and_var)
 
-        def train(lr, cliprange, obs, returns, masks, actions, values, neglogpacs,
+        def train(lr,
+                  cliprange,
+                  obs,
+                  returns,
+                  masks,
+                  actions,
+                  values,
+                  neglogpacs,
                   states=None):
             # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
             # Returns = R + yV(s')
@@ -125,19 +136,27 @@ class Model(object):
 
             # Normalize the advantages
             advs = (advs - advs.mean()) / (advs.std() + 1e-8)
-            td_map = {train_model.X: obs, A: actions, ADV: advs, R: returns, LR: lr,
-                      CLIPRANGE:     cliprange, OLDNEGLOGPAC: neglogpacs,
-                      OLDVPRED:      values}
+            td_map = {
+                train_model.X: obs,
+                A: actions,
+                ADV: advs,
+                R: returns,
+                LR: lr,
+                CLIPRANGE: cliprange,
+                OLDNEGLOGPAC: neglogpacs,
+                OLDVPRED: values
+            }
             if states is not None:
                 td_map[train_model.S] = states
                 td_map[train_model.M] = masks
             return sess.run(
                 [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train],
-                td_map
-            )[:-1]
+                td_map)[:-1]
 
-        self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl',
-                           'clipfrac']
+        self.loss_names = [
+            'policy_loss', 'value_loss', 'policy_entropy', 'approxkl',
+            'clipfrac'
+        ]
         self.train = train
         self.train_model = train_model
         self.act_model = act_model
@@ -150,7 +169,8 @@ class Model(object):
 
         if MPI is None or MPI.COMM_WORLD.Get_rank() == 0:
             initialize()
-        global_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="")
+        global_variables = tf.get_collection(
+            tf.GraphKeys.GLOBAL_VARIABLES, scope="")
 
         if MPI is not None:
             sync_from_root(sess, global_variables)  # pylint: disable=E1101
@@ -182,9 +202,8 @@ class Runner(AbstractEnvRunner):
         for _ in range(self.nsteps):
             # Given observations, get action value and neglopacs
             # We already have self.obs because Runner superclass run self.obs[:] = env.reset() on init
-            actions, values, self.states, neglogpacs = self.model.step(self.obs,
-                                                                       S=self.states,
-                                                                       M=self.dones)
+            actions, values, self.states, neglogpacs = self.model.step(
+                self.obs, S=self.states, M=self.dones)
             mb_obs.append(self.obs.copy())
             mb_actions.append(actions)
             mb_values.append(values)
@@ -218,14 +237,13 @@ class Runner(AbstractEnvRunner):
             else:
                 nextnonterminal = 1.0 - mb_dones[t + 1]
                 nextvalues = mb_values[t + 1]
-            delta = mb_rewards[t] + self.gamma * nextvalues * nextnonterminal - mb_values[
-                t]
+            delta = mb_rewards[
+                t] + self.gamma * nextvalues * nextnonterminal - mb_values[t]
             mb_advs[
                 t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
         mb_returns = mb_advs + mb_values
-        return (
-        *map(sf01, (mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs)),
-        mb_states, epinfos)
+        return (*map(sf01, (mb_obs, mb_returns, mb_dones, mb_actions,
+                            mb_values, mb_neglogpacs)), mb_states, epinfos)
 
 
 # obs, returns, masks, actions, values, neglogpacs, states = runner.run()
@@ -244,11 +262,26 @@ def constfn(val):
     return f
 
 
-def learn(*, network, env, total_timesteps, eval_env=None, seed=None, nsteps=2048,
-          ent_coef=0.0, lr=3e-4,
-          vf_coef=0.5, max_grad_norm=0.5, gamma=0.99, lam=0.95,
-          log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
-          save_interval=0, load_path=None, **network_kwargs):
+def learn(*,
+          network,
+          env,
+          total_timesteps,
+          eval_env=None,
+          seed=None,
+          nsteps=2048,
+          ent_coef=0.0,
+          lr=3e-4,
+          vf_coef=0.5,
+          max_grad_norm=0.5,
+          gamma=0.99,
+          lam=0.95,
+          log_interval=10,
+          nminibatches=4,
+          noptepochs=4,
+          cliprange=0.2,
+          save_interval=0,
+          load_path=None,
+          **network_kwargs):
     '''
     Learn policy using PPO algorithm (https://arxiv.org/abs/1707.06347)
 
@@ -340,8 +373,8 @@ def learn(*, network, env, total_timesteps, eval_env=None, seed=None, nsteps=204
     # Instantiate the runner object
     runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
     if eval_env is not None:
-        eval_runner = Runner(env=eval_env, model=model, nsteps=nsteps, gamma=gamma,
-                             lam=lam)
+        eval_runner = Runner(
+            env=eval_env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
 
     epinfobuf = deque(maxlen=100)
     if eval_env is not None:
@@ -361,9 +394,11 @@ def learn(*, network, env, total_timesteps, eval_env=None, seed=None, nsteps=204
         # Calculate the cliprange
         cliprangenow = cliprange(frac)
         # Get minibatch
-        obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run()  # pylint: disable=E0632
+        obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run(
+        )  # pylint: disable=E0632
         if eval_env is not None:
-            eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run()  # pylint: disable=E0632
+            eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run(
+            )  # pylint: disable=E0632
 
         epinfobuf.extend(epinfos)
         if eval_env is not None:
@@ -382,9 +417,11 @@ def learn(*, network, env, total_timesteps, eval_env=None, seed=None, nsteps=204
                 for start in range(0, nbatch, nbatch_train):
                     end = start + nbatch_train
                     mbinds = inds[start:end]
-                    slices = (arr[mbinds] for arr in
-                              (obs, returns, masks, actions, values, neglogpacs))
-                    mblossvals.append(model.train(lrnow, cliprangenow, *slices))
+                    slices = (arr[mbinds]
+                              for arr in (obs, returns, masks, actions, values,
+                                          neglogpacs))
+                    mblossvals.append(
+                        model.train(lrnow, cliprangenow, *slices))
         else:  # recurrent version
             assert nenvs % nminibatches == 0
             envsperbatch = nenvs // nminibatches
@@ -397,10 +434,12 @@ def learn(*, network, env, total_timesteps, eval_env=None, seed=None, nsteps=204
                     end = start + envsperbatch
                     mbenvinds = envinds[start:end]
                     mbflatinds = flatinds[mbenvinds].ravel()
-                    slices = (arr[mbflatinds] for arr in
-                              (obs, returns, masks, actions, values, neglogpacs))
+                    slices = (arr[mbflatinds]
+                              for arr in (obs, returns, masks, actions, values,
+                                          neglogpacs))
                     mbstates = states[mbenvinds]
-                    mblossvals.append(model.train(lrnow, cliprangenow, *slices, mbstates))
+                    mblossvals.append(
+                        model.train(lrnow, cliprangenow, *slices, mbstates))
 
         # Feedforward --> get losses --> update
         lossvals = np.mean(mblossvals, axis=0)
@@ -417,21 +456,26 @@ def learn(*, network, env, total_timesteps, eval_env=None, seed=None, nsteps=204
             logger.logkv("total_timesteps", update * nbatch)
             logger.logkv("fps", fps)
             logger.logkv("explained_variance", float(ev))
-            logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
-            logger.logkv('eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
+            logger.logkv('eprewmean',
+                         safemean([epinfo['r'] for epinfo in epinfobuf]))
+            logger.logkv('eplenmean',
+                         safemean([epinfo['l'] for epinfo in epinfobuf]))
             if eval_env is not None:
-                logger.logkv('eval_eprewmean',
-                             safemean([epinfo['r'] for epinfo in eval_epinfobuf]))
-                logger.logkv('eval_eplenmean',
-                             safemean([epinfo['l'] for epinfo in eval_epinfobuf]))
+                logger.logkv(
+                    'eval_eprewmean',
+                    safemean([epinfo['r'] for epinfo in eval_epinfobuf]))
+                logger.logkv(
+                    'eval_eplenmean',
+                    safemean([epinfo['l'] for epinfo in eval_epinfobuf]))
             logger.logkv('time_elapsed', tnow - tfirststart)
             for (lossval, lossname) in zip(lossvals, model.loss_names):
                 logger.logkv(lossname, lossval)
             if MPI is None or MPI.COMM_WORLD.Get_rank() == 0:
                 logger.dumpkvs()
-        if save_interval and (
-                update % save_interval == 0 or update == 1) and logger.get_dir() and (
-                MPI is None or MPI.COMM_WORLD.Get_rank() == 0):
+        if save_interval and (update % save_interval == 0
+                              or update == 1) and logger.get_dir() and (
+                                  MPI is None
+                                  or MPI.COMM_WORLD.Get_rank() == 0):
             checkdir = osp.join(logger.get_dir(), 'checkpoints')
             os.makedirs(checkdir, exist_ok=True)
             savepath = osp.join(checkdir, '%.5i' % update)

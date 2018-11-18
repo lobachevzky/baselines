@@ -33,8 +33,9 @@ def parse_space(dim: int):
         regex = re.compile('\((-?[\.\d]+),(-?[\.\d]+)\)')
         matches = regex.findall(arg)
         if len(matches) != dim:
-            raise argparse.ArgumentTypeError(f'Arg {arg} must have {dim} substrings '
-                                             f'matching pattern {regex}.')
+            raise argparse.ArgumentTypeError(
+                f'Arg {arg} must have {dim} substrings '
+                f'matching pattern {regex}.')
         return make_box(*matches)
 
     return _parse_space
@@ -44,8 +45,9 @@ def parse_vector(length: int, delim: str):
     def _parse_vector(arg: str):
         vector = tuple(map(float, arg.split(delim)))
         if len(vector) != length:
-            raise argparse.ArgumentError(f'Arg {arg} must include {length} float values'
-                                         f'delimited by "{delim}".')
+            raise argparse.ArgumentError(
+                f'Arg {arg} must include {length} float values'
+                f'delimited by "{delim}".')
         return vector
 
     return _parse_vector
@@ -74,13 +76,16 @@ def put_in_xml_setter(arg: str):
 
 def env_wrapper(func):
     @wraps(func)
-    def _wrapper(set_xml, use_dof, n_blocks, goal_space, xml_file, geofence, **kwargs):
+    def _wrapper(set_xml, use_dof, n_blocks, goal_space, xml_file, geofence,
+                 **kwargs):
         xml_filepath = Path(
-            Path(__file__).parent.parent, 'environments', 'models', xml_file).absolute()
+            Path(__file__).parent.parent, 'environments', 'models',
+            xml_file).absolute()
         if set_xml is None:
             set_xml = []
         site_size = ' '.join([str(geofence)] * 3)
-        path = Path('worldbody', 'body[@name="goal"]', 'site[@name="goal"]', 'size')
+        path = Path('worldbody', 'body[@name="goal"]', 'site[@name="goal"]',
+                    'size')
         set_xml += [XMLSetter(path=f'./{path}', value=site_size)]
         with mutate_xml(
                 changes=set_xml,
@@ -89,7 +94,10 @@ def env_wrapper(func):
                 goal_space=goal_space,
                 xml_filepath=xml_filepath) as temp_path:
             return func(
-                geofence=geofence, temp_path=temp_path, goal_space=goal_space, **kwargs)
+                geofence=geofence,
+                temp_path=temp_path,
+                goal_space=goal_space,
+                **kwargs)
 
     return _wrapper
 
@@ -98,8 +106,8 @@ XMLSetter = namedtuple('XMLSetter', 'path value')
 
 
 @contextmanager
-def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blocks: int,
-               xml_filepath: Path):
+def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box,
+               n_blocks: int, xml_filepath: Path):
     def rel_to_abs(path: Path):
         return Path(xml_filepath.parent, path)
 
@@ -121,7 +129,8 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
                 pos = ' '.join(map(str, goal_space.sample()))
                 name = f'block{i}'
 
-                body = ET.SubElement(worldbody, 'body', attrib=dict(name=name, pos=pos))
+                body = ET.SubElement(
+                    worldbody, 'body', attrib=dict(name=name, pos=pos))
                 ET.SubElement(
                     body,
                     'geom',
@@ -133,9 +142,10 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
                         rgba=rgba[i],
                         condim='6',
                         solimp="0.99 0.99 "
-                               "0.01",
+                        "0.01",
                         solref='0.01 1'))
-                ET.SubElement(body, 'freejoint', attrib=dict(name=f'block{i}joint'))
+                ET.SubElement(
+                    body, 'freejoint', attrib=dict(name=f'block{i}joint'))
 
         for change in changes:
             parent = re.sub('/[^/]*$', '', change.path)
@@ -170,7 +180,8 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
         return tree
 
     included_files = [
-        rel_to_abs(e.get('file')) for e in ET.parse(xml_filepath).findall('*/include')
+        rel_to_abs(e.get('file'))
+        for e in ET.parse(xml_filepath).findall('*/include')
     ]
 
     temp = {
@@ -191,11 +202,11 @@ def mutate_xml(changes: List[XMLSetter], dofs: List[str], goal_space: Box, n_blo
 
 
 @env_wrapper
-def main(max_steps, min_lift_height, geofence, seed, learning_rate,
-         goal_space,
-         block_space, record_separate_episodes,
-         steps_per_action, render, render_freq, record, randomize_pose, image_dims, record_freq, record_path, temp_path,
-         no_random_reset, obs_type, multi_block, logdir):
+def main(max_steps, min_lift_height, geofence, seed, learning_rate, goal_space,
+         block_space, record_separate_episodes, steps_per_action, render,
+         render_freq, record, randomize_pose, image_dims, record_freq,
+         record_path, temp_path, no_random_reset, obs_type, multi_block,
+         logdir):
     """
 
     """
@@ -230,8 +241,8 @@ def main(max_steps, min_lift_height, geofence, seed, learning_rate,
         total_timesteps=1e20,
         lr=learning_rate,
         seed=seed,
-        value_network='copy'
-    )
+        value_network='copy')
+
 
 def cli():
     p = argparse.ArgumentParser()
@@ -241,7 +252,8 @@ def cli():
     p.add_argument('--max-steps', type=int, required=True)
     p.add_argument('--n-blocks', type=int, required=True)
     p.add_argument('--min-lift-height', type=float, default=None)
-    p.add_argument('--goal-space', type=parse_space(dim=3), default=None)  # TODO
+    p.add_argument(
+        '--goal-space', type=parse_space(dim=3), default=None)  # TODO
     p.add_argument('--block-space', type=parse_space(dim=4), required=True)
     p.add_argument('--obs-type', type=str, default=None)
     p.add_argument('--geofence', type=float, required=True)
@@ -255,9 +267,12 @@ def cli():
     p.add_argument('--record-freq', type=int, default=None)
     p.add_argument('--record-path', type=Path, default=None)
     p.add_argument(
-        '--image-dims', type=parse_vector(length=2, delim=','), default='800,800')
+        '--image-dims',
+        type=parse_vector(length=2, delim=','),
+        default='800,800')
     p.add_argument('--xml-file', type=Path, default='world.xml')
-    p.add_argument('--set-xml', type=put_in_xml_setter, action='append', nargs='*')
+    p.add_argument(
+        '--set-xml', type=put_in_xml_setter, action='append', nargs='*')
     p.add_argument('--use-dof', type=str, action='append')
     p.add_argument('--multi-block', action='store_true')
     main(**vars(p.parse_args()))

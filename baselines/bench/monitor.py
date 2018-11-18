@@ -1,26 +1,34 @@
 __all__ = ['Monitor', 'get_monitor_files', 'load_results']
 
+import csv
+from glob import glob
+import json
+import os.path as osp
+import time
+
 import gym
 from gym.core import Wrapper
-import time
-from glob import glob
-import csv
-import os.path as osp
-import json
-import numpy as np
+
 
 class Monitor(Wrapper):
     EXT = "monitor.csv"
     f = None
 
-    def __init__(self, env, filename, allow_early_resets=False, reset_keywords=(), info_keywords=()):
+    def __init__(self,
+                 env,
+                 filename,
+                 allow_early_resets=False,
+                 reset_keywords=(),
+                 info_keywords=()):
         Wrapper.__init__(self, env=env)
         self.tstart = time.time()
         self.results_writer = ResultsWriter(
             filename,
-            header={"t_start": time.time(), 'env_id' : env.spec and env.spec.id},
-            extra_keys=reset_keywords + info_keywords
-        )
+            header={
+                "t_start": time.time(),
+                'env_id': env.spec and env.spec.id
+            },
+            extra_keys=reset_keywords + info_keywords)
         self.reset_keywords = reset_keywords
         self.info_keywords = info_keywords
         self.allow_early_resets = allow_early_resets
@@ -30,23 +38,26 @@ class Monitor(Wrapper):
         self.episode_lengths = []
         self.episode_times = []
         self.total_steps = 0
-        self.current_reset_info = {} # extra info about the current episode, that was passed in during reset()
+        self.current_reset_info = {
+        }  # extra info about the current episode, that was passed in during reset()
 
     def reset(self, **kwargs):
         self.reset_state()
         for k in self.reset_keywords:
             v = kwargs.get(k)
             if v is None:
-                raise ValueError('Expected you to pass kwarg %s into reset'%k)
+                raise ValueError(
+                    'Expected you to pass kwarg %s into reset' % k)
             self.current_reset_info[k] = v
         return self.env.reset(**kwargs)
 
     def reset_state(self):
         if not self.allow_early_resets and not self.needs_reset:
-            raise RuntimeError("Tried to reset an environment before done. If you want to allow early resets, wrap your env with Monitor(env, path, allow_early_resets=True)")
+            raise RuntimeError(
+                "Tried to reset an environment before done. If you want to allow early resets, wrap your env with Monitor(env, path, allow_early_resets=True)"
+            )
         self.rewards = []
         self.needs_reset = False
-
 
     def step(self, action):
         if self.needs_reset:
@@ -61,7 +72,11 @@ class Monitor(Wrapper):
             self.needs_reset = True
             eprew = sum(self.rewards)
             eplen = len(self.rewards)
-            epinfo = {"r": round(eprew, 6), "l": eplen, "t": round(time.time() - self.tstart, 6)}
+            epinfo = {
+                "r": round(eprew, 6),
+                "l": eplen,
+                "t": round(time.time() - self.tstart, 6)
+            }
             for k in self.info_keywords:
                 epinfo[k] = info[k]
             self.episode_rewards.append(eprew)
@@ -91,6 +106,7 @@ class Monitor(Wrapper):
     def get_episode_times(self):
         return self.episode_times
 
+
 class LoadMonitorResultsError(Exception):
     pass
 
@@ -111,7 +127,8 @@ class ResultsWriter(object):
             if isinstance(header, dict):
                 header = '# {} \n'.format(json.dumps(header))
             self.f.write(header)
-            self.logger = csv.DictWriter(self.f, fieldnames=('r', 'l', 't')+tuple(extra_keys))
+            self.logger = csv.DictWriter(
+                self.f, fieldnames=('r', 'l', 't') + tuple(extra_keys))
             self.logger.writeheader()
             self.f.flush()
 
@@ -121,17 +138,18 @@ class ResultsWriter(object):
             self.f.flush()
 
 
-
 def get_monitor_files(dir):
     return glob(osp.join(dir, "*" + Monitor.EXT))
 
+
 def load_results(dir):
     import pandas
-    monitor_files = (
-        glob(osp.join(dir, "*monitor.json")) +
-        glob(osp.join(dir, "*monitor.csv"))) # get both csv and (old) json files
+    monitor_files = (glob(osp.join(dir, "*monitor.json")) + glob(
+        osp.join(dir, "*monitor.csv")))  # get both csv and (old) json files
     if not monitor_files:
-        raise LoadMonitorResultsError("no monitor files of the form *%s found in %s" % (Monitor.EXT, dir))
+        raise LoadMonitorResultsError(
+            "no monitor files of the form *%s found in %s" % (Monitor.EXT,
+                                                              dir))
     dfs = []
     headers = []
     for fname in monitor_files:
@@ -144,7 +162,7 @@ def load_results(dir):
                 header = json.loads(firstline[1:])
                 df = pandas.read_csv(fh, index_col=None)
                 headers.append(header)
-            elif fname.endswith('json'): # Deprecated json format
+            elif fname.endswith('json'):  # Deprecated json format
                 episodes = []
                 lines = fh.readlines()
                 header = json.loads(lines[0])
@@ -161,8 +179,9 @@ def load_results(dir):
     df.sort_values('t', inplace=True)
     df.reset_index(inplace=True)
     df['t'] -= min(header['t_start'] for header in headers)
-    df.headers = headers # HACK to preserve backwards compatibility
+    df.headers = headers  # HACK to preserve backwards compatibility
     return df
+
 
 def test_monitor():
     env = gym.make("CartPole-v1")
@@ -181,9 +200,13 @@ def test_monitor():
     assert firstline.startswith('#')
     metadata = json.loads(firstline[1:])
     assert metadata['env_id'] == "CartPole-v1"
-    assert set(metadata.keys()) == {'env_id', 'gym_version', 't_start'},  "Incorrect keys in monitor metadata"
+    assert set(
+        metadata.keys()) == {'env_id', 'gym_version',
+                             't_start'}, "Incorrect keys in monitor metadata"
 
     last_logline = pandas.read_csv(f, index_col=None)
-    assert set(last_logline.keys()) == {'l', 't', 'r'}, "Incorrect keys in monitor logline"
+    assert set(
+        last_logline.keys()) == {'l', 't',
+                                 'r'}, "Incorrect keys in monitor logline"
     f.close()
     os.remove(mon_file)

@@ -1,8 +1,8 @@
-import pytest
 import gym
 
-from baselines.run import get_learn_function
 from baselines.common.tests.util import reward_per_episode_test
+from baselines.run import get_learn_function
+import pytest
 
 common_kwargs = dict(
     total_timesteps=30000,
@@ -12,13 +12,14 @@ common_kwargs = dict(
 )
 
 learn_kwargs = {
-    'a2c' : dict(nsteps=32, value_network='copy', lr=0.05),
+    'a2c': dict(nsteps=32, value_network='copy', lr=0.05),
     'acer': dict(value_network='copy'),
     'acktr': dict(nsteps=32, value_network='copy', is_async=False),
     'deepq': dict(total_timesteps=20000),
     'ppo2': dict(value_network='copy'),
     'trpo_mpi': {}
 }
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize("alg", learn_kwargs.keys())
@@ -32,6 +33,7 @@ def test_cartpole(alg):
     kwargs.update(learn_kwargs[alg])
 
     learn_fn = lambda e: get_learn_function(alg)(env=e, **kwargs)
+
     def env_fn():
 
         env = gym.make('CartPole-v0')
@@ -39,6 +41,7 @@ def test_cartpole(alg):
         return env
 
     reward_per_episode_test(env_fn, learn_fn, 100)
+
 
 if __name__ == '__main__':
     test_cartpole('acer')

@@ -4,20 +4,19 @@ and plot the results in the same figure for easy comparison.
 '''
 
 import argparse
-import os
 import glob
-import gym
+import os
 
-import matplotlib.pyplot as plt
+import gym
 import numpy as np
 import tensorflow as tf
 
-from baselines.gail import run_mujoco
-from baselines.gail import mlp_policy
-from baselines.common import set_global_seeds, tf_util as U
+from baselines.common import set_global_seeds
+from baselines.common import tf_util as U
 from baselines.common.misc_util import boolean_flag
+from baselines.gail import mlp_policy, run_mujoco
 from baselines.gail.dataset.mujoco_dset import Mujoco_Dset
-
+import matplotlib.pyplot as plt
 
 plt.style.use('ggplot')
 CONFIG = {
@@ -34,27 +33,43 @@ def argsparser():
     parser = argparse.ArgumentParser('Do evaluation')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--policy_hidden_size', type=int, default=100)
-    parser.add_argument('--env', type=str, choices=['Hopper', 'Walker2d', 'HalfCheetah',
-                                                    'Humanoid', 'HumanoidStandup'])
-    boolean_flag(parser, 'stochastic_policy', default=False, help='use stochastic/deterministic policy to evaluate')
+    parser.add_argument(
+        '--env',
+        type=str,
+        choices=[
+            'Hopper', 'Walker2d', 'HalfCheetah', 'Humanoid', 'HumanoidStandup'
+        ])
+    boolean_flag(
+        parser,
+        'stochastic_policy',
+        default=False,
+        help='use stochastic/deterministic policy to evaluate')
     return parser.parse_args()
 
 
-def evaluate_env(env_name, seed, policy_hidden_size, stochastic, reuse, prefix):
-
+def evaluate_env(env_name, seed, policy_hidden_size, stochastic, reuse,
+                 prefix):
     def get_checkpoint_dir(checkpoint_list, limit, prefix):
         for checkpoint in checkpoint_list:
-            if ('limitation_'+str(limit) in checkpoint) and (prefix in checkpoint):
+            if ('limitation_' + str(limit) in checkpoint) and (
+                    prefix in checkpoint):
                 return checkpoint
         return None
 
     def policy_fn(name, ob_space, ac_space, reuse=False):
-        return mlp_policy.MlpPolicy(name=name, ob_space=ob_space, ac_space=ac_space,
-                                    reuse=reuse, hid_size=policy_hidden_size, num_hid_layers=2)
+        return mlp_policy.MlpPolicy(
+            name=name,
+            ob_space=ob_space,
+            ac_space=ac_space,
+            reuse=reuse,
+            hid_size=policy_hidden_size,
+            num_hid_layers=2)
 
-    data_path = os.path.join('data', 'deterministic.trpo.' + env_name + '.0.00.npz')
+    data_path = os.path.join('data',
+                             'deterministic.trpo.' + env_name + '.0.00.npz')
     dataset = load_dataset(data_path)
-    checkpoint_list = glob.glob(os.path.join('checkpoint', '*' + env_name + ".*"))
+    checkpoint_list = glob.glob(
+        os.path.join('checkpoint', '*' + env_name + ".*"))
     log = {
         'traj_limitation': [],
         'upper_bound': [],
@@ -64,22 +79,25 @@ def evaluate_env(env_name, seed, policy_hidden_size, stochastic, reuse, prefix):
     }
     for i, limit in enumerate(CONFIG['traj_limitation']):
         # Do one evaluation
-        upper_bound = sum(dataset.rets[:limit])/limit
-        checkpoint_dir = get_checkpoint_dir(checkpoint_list, limit, prefix=prefix)
+        upper_bound = sum(dataset.rets[:limit]) / limit
+        checkpoint_dir = get_checkpoint_dir(
+            checkpoint_list, limit, prefix=prefix)
         checkpoint_path = tf.train.latest_checkpoint(checkpoint_dir)
         env = gym.make(env_name + '-v1')
         env.seed(seed)
-        print('Trajectory limitation: {}, Load checkpoint: {}, '.format(limit, checkpoint_path))
-        avg_len, avg_ret = run_mujoco.runner(env,
-                                             policy_fn,
-                                             checkpoint_path,
-                                             timesteps_per_batch=1024,
-                                             number_trajs=10,
-                                             stochastic_policy=stochastic,
-                                             reuse=((i != 0) or reuse))
-        normalized_ret = avg_ret/upper_bound
-        print('Upper bound: {}, evaluation returns: {}, normalized scores: {}'.format(
-            upper_bound, avg_ret, normalized_ret))
+        print('Trajectory limitation: {}, Load checkpoint: {}, '.format(
+            limit, checkpoint_path))
+        avg_len, avg_ret = run_mujoco.runner(
+            env,
+            policy_fn,
+            checkpoint_path,
+            timesteps_per_batch=1024,
+            number_trajs=10,
+            stochastic_policy=stochastic,
+            reuse=((i != 0) or reuse))
+        normalized_ret = avg_ret / upper_bound
+        print('Upper bound: {}, evaluation returns: {}, normalized scores: {}'.
+              format(upper_bound, avg_ret, normalized_ret))
         log['traj_limitation'].append(limit)
         log['upper_bound'].append(upper_bound)
         log['avg_ret'].append(avg_ret)
@@ -102,15 +120,18 @@ def plot(env_name, bc_log, gail_log, stochastic):
     plt.legend(['expert', 'bc-imitator', 'gail-imitator'], loc='lower right')
     plt.grid(b=True, which='major', color='gray', linestyle='--')
     if stochastic:
-        title_name = 'result/{}-unnormalized-stochastic-scores.png'.format(env_name)
+        title_name = 'result/{}-unnormalized-stochastic-scores.png'.format(
+            env_name)
     else:
-        title_name = 'result/{}-unnormalized-deterministic-scores.png'.format(env_name)
+        title_name = 'result/{}-unnormalized-deterministic-scores.png'.format(
+            env_name)
     plt.savefig(title_name)
     plt.close()
 
     bc_normalized_ret = bc_log['normalized_ret']
     gail_normalized_ret = gail_log['normalized_ret']
-    plt.plot(CONFIG['traj_limitation'], np.ones(len(CONFIG['traj_limitation'])))
+    plt.plot(CONFIG['traj_limitation'], np.ones(
+        len(CONFIG['traj_limitation'])))
     plt.plot(CONFIG['traj_limitation'], bc_normalized_ret)
     plt.plot(CONFIG['traj_limitation'], gail_normalized_ret)
     plt.xlabel('Number of expert trajectories')
@@ -119,9 +140,11 @@ def plot(env_name, bc_log, gail_log, stochastic):
     plt.legend(['expert', 'bc-imitator', 'gail-imitator'], loc='lower right')
     plt.grid(b=True, which='major', color='gray', linestyle='--')
     if stochastic:
-        title_name = 'result/{}-normalized-stochastic-scores.png'.format(env_name)
+        title_name = 'result/{}-normalized-stochastic-scores.png'.format(
+            env_name)
     else:
-        title_name = 'result/{}-normalized-deterministic-scores.png'.format(env_name)
+        title_name = 'result/{}-normalized-deterministic-scores.png'.format(
+            env_name)
     plt.ylim(0, 1.6)
     plt.savefig(title_name)
     plt.close()

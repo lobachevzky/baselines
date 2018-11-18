@@ -1,12 +1,12 @@
+import functools
+import importlib
+import inspect
 import os
 import subprocess
 import sys
-import importlib
-import inspect
-import functools
 
-import tensorflow as tf
 import numpy as np
+import tensorflow as tf
 
 from baselines.common import tf_util as U
 
@@ -50,8 +50,9 @@ def import_function(spec):
 def flatten_grads(var_list, grads):
     """Flattens a variables and their gradients.
     """
-    return tf.concat([tf.reshape(grad, [U.numel(v)])
-                      for (v, grad) in zip(var_list, grads)], 0)
+    return tf.concat(
+        [tf.reshape(grad, [U.numel(v)]) for (v, grad) in zip(var_list, grads)],
+        0)
 
 
 def nn(input, layers_sizes, reuse=None, flatten=False, name=""):
@@ -59,11 +60,12 @@ def nn(input, layers_sizes, reuse=None, flatten=False, name=""):
     """
     for i, size in enumerate(layers_sizes):
         activation = tf.nn.relu if i < len(layers_sizes) - 1 else None
-        input = tf.layers.dense(inputs=input,
-                                units=size,
-                                kernel_initializer=tf.contrib.layers.xavier_initializer(),
-                                reuse=reuse,
-                                name=name + '_' + str(i))
+        input = tf.layers.dense(
+            inputs=input,
+            units=size,
+            kernel_initializer=tf.contrib.layers.xavier_initializer(),
+            reuse=reuse,
+            name=name + '_' + str(i))
         if activation:
             input = activation(input)
     if flatten:
@@ -82,6 +84,7 @@ def install_mpi_excepthook():
         sys.stdout.flush()
         sys.stderr.flush()
         MPI.COMM_WORLD.Abort()
+
     sys.excepthook = new_hook
 
 
@@ -93,11 +96,7 @@ def mpi_fork(n, extra_mpi_args=[]):
         return "child"
     if os.getenv("IN_MPI") is None:
         env = os.environ.copy()
-        env.update(
-            MKL_NUM_THREADS="1",
-            OMP_NUM_THREADS="1",
-            IN_MPI="1"
-        )
+        env.update(MKL_NUM_THREADS="1", OMP_NUM_THREADS="1", IN_MPI="1")
         # "-bind-to core" is crucial for good performance
         args = ["mpirun", "-np", str(n)] + \
             extra_mpi_args + \

@@ -1,21 +1,23 @@
-from baselines.common import explained_variance, zipsame, dataset
-from baselines import logger
-import baselines.common.tf_util as U
-import tensorflow as tf, numpy as np
-import time
-from baselines.common import colorize
 from collections import deque
-from baselines.common import set_global_seeds
-from baselines.common.mpi_adam import MpiAdam
+from contextlib import contextmanager
+import time
+
+import numpy as np
+import tensorflow as tf
+
+from baselines import logger
+from baselines.common import colorize, dataset, explained_variance, set_global_seeds, zipsame
 from baselines.common.cg import cg
 from baselines.common.input import observation_placeholder
+from baselines.common.mpi_adam import MpiAdam
 from baselines.common.policies import build_policy
-from contextlib import contextmanager
+import baselines.common.tf_util as U
 
 try:
     from mpi4py import MPI
 except ImportError:
     MPI = None
+
 
 def traj_segment_generator(pi, env, horizon, stochastic):
     # Initialize state variables
@@ -45,9 +47,17 @@ def traj_segment_generator(pi, env, horizon, stochastic):
         # before returning segment [0, T-1] so we get the correct
         # terminal value
         if t > 0 and t % horizon == 0:
-            yield {"ob" : obs, "rew" : rews, "vpred" : vpreds, "new" : news,
-                    "ac" : acs, "prevac" : prevacs, "nextvpred": vpred * (1 - new),
-                    "ep_rets" : ep_rets, "ep_lens" : ep_lens}
+            yield {
+                "ob": obs,
+                "rew": rews,
+                "vpred": vpreds,
+                "new": news,
+                "ac": acs,
+                "prevac": prevacs,
+                "nextvpred": vpred * (1 - new),
+                "ep_rets": ep_rets,
+                "ep_lens": ep_lens
+            }
             _, vpred, _, _ = pi.step(ob, stochastic=stochastic)
             # Be careful!!! if you change the downstream algorithm to aggregate
             # several of these batches, then be sure to do a deepcopy
@@ -73,38 +83,43 @@ def traj_segment_generator(pi, env, horizon, stochastic):
             ob = env.reset()
         t += 1
 
+
 def add_vtarg_and_adv(seg, gamma, lam):
-    new = np.append(seg["new"], 0) # last element is only used for last vtarg, but we already zeroed it if last new = 1
+    new = np.append(
+        seg["new"], 0
+    )  # last element is only used for last vtarg, but we already zeroed it if last new = 1
     vpred = np.append(seg["vpred"], seg["nextvpred"])
     T = len(seg["rew"])
     seg["adv"] = gaelam = np.empty(T, 'float32')
     rew = seg["rew"]
     lastgaelam = 0
     for t in reversed(range(T)):
-        nonterminal = 1-new[t+1]
-        delta = rew[t] + gamma * vpred[t+1] * nonterminal - vpred[t]
+        nonterminal = 1 - new[t + 1]
+        delta = rew[t] + gamma * vpred[t + 1] * nonterminal - vpred[t]
         gaelam[t] = lastgaelam = delta + gamma * lam * nonterminal * lastgaelam
     seg["tdlamret"] = seg["adv"] + seg["vpred"]
 
-def learn(*,
+
+def learn(
+        *,
         network,
         env,
         total_timesteps,
-        timesteps_per_batch=1024, # what to train on
+        timesteps_per_batch=1024,  # what to train on
         max_kl=0.001,
         cg_iters=10,
         gamma=0.99,
-        lam=1.0, # advantage estimation
+        lam=1.0,  # advantage estimation
         seed=None,
         ent_coef=0.0,
         cg_damping=1e-2,
         vf_stepsize=3e-4,
-        vf_iters =3,
-        max_episodes=0, max_iters=0,  # time constraint
+        vf_iters=3,
+        max_episodes=0,
+        max_iters=0,  # time constraint
         callback=None,
         load_path=None,
-        **network_kwargs
-        ):
+        **network_kwargs):
     '''
     learn a policy function with TRPO algorithm
 
@@ -158,12 +173,11 @@ def learn(*,
         rank = 0
 
     cpus_per_worker = 1
-    U.get_session(config=tf.ConfigProto(
+    U.get_session(
+        config=tf.ConfigProto(
             allow_soft_placement=True,
             inter_op_parallelism_threads=cpus_per_worker,
-            intra_op_parallelism_threads=cpus_per_worker
-    ))
-
+            intra_op_parallelism_threads=cpus_per_worker))
 
     policy = build_policy(env, network, value_network='copy', **network_kwargs)
     set_global_seeds(seed)
@@ -180,8 +194,10 @@ def learn(*,
     with tf.variable_scope("oldpi"):
         oldpi = policy(observ_placeholder=ob)
 
-    atarg = tf.placeholder(dtype=tf.float32, shape=[None]) # Target advantage function (if applicable)
-    ret = tf.placeholder(dtype=tf.float32, shape=[None]) # Empirical return
+    atarg = tf.placeholder(
+        dtype=tf.float32,
+        shape=[None])  # Target advantage function (if applicable)
+    ret = tf.placeholder(dtype=tf.float32, shape=[None])  # Empirical return
 
     ac = pi.pdtype.sample_placeholder([None])
 
@@ -193,7 +209,8 @@ def learn(*,
 
     vferr = tf.reduce_mean(tf.square(pi.vf - ret))
 
-    ratio = tf.exp(pi.pd.logp(ac) - oldpi.pd.logp(ac)) # advantage * pnew / pold
+    ratio = tf.exp(
+        pi.pd.logp(ac) - oldpi.pd.logp(ac))  # advantage * pnew / pold
     surrgain = tf.reduce_mean(ratio * atarg)
 
     optimgain = surrgain + entbonus
@@ -213,24 +230,35 @@ def learn(*,
     get_flat = U.GetFlat(var_list)
     set_from_flat = U.SetFromFlat(var_list)
     klgrads = tf.gradients(dist, var_list)
-    flat_tangent = tf.placeholder(dtype=tf.float32, shape=[None], name="flat_tan")
+    flat_tangent = tf.placeholder(
+        dtype=tf.float32, shape=[None], name="flat_tan")
     shapes = [var.get_shape().as_list() for var in var_list]
     start = 0
     tangents = []
     for shape in shapes:
         sz = U.intprod(shape)
-        tangents.append(tf.reshape(flat_tangent[start:start+sz], shape))
+        tangents.append(tf.reshape(flat_tangent[start:start + sz], shape))
         start += sz
-    gvp = tf.add_n([tf.reduce_sum(g*tangent) for (g, tangent) in zipsame(klgrads, tangents)]) #pylint: disable=E1111
+    gvp = tf.add_n([
+        tf.reduce_sum(g * tangent)
+        for (g, tangent) in zipsame(klgrads, tangents)
+    ])  #pylint: disable=E1111
     fvp = U.flatgrad(gvp, var_list)
 
-    assign_old_eq_new = U.function([],[], updates=[tf.assign(oldv, newv)
-        for (oldv, newv) in zipsame(get_variables("oldpi"), get_variables("pi"))])
+    assign_old_eq_new = U.function(
+        [], [],
+        updates=[
+            tf.assign(oldv, newv)
+            for (oldv,
+                 newv) in zipsame(get_variables("oldpi"), get_variables("pi"))
+        ])
 
     compute_losses = U.function([ob, ac, atarg], losses)
-    compute_lossandgrad = U.function([ob, ac, atarg], losses + [U.flatgrad(optimgain, var_list)])
+    compute_lossandgrad = U.function(
+        [ob, ac, atarg], losses + [U.flatgrad(optimgain, var_list)])
     compute_fvp = U.function([flat_tangent, ob, ac, atarg], fvp)
-    compute_vflossandgrad = U.function([ob, ret], U.flatgrad(vferr, vf_var_list))
+    compute_vflossandgrad = U.function([ob, ret], U.flatgrad(
+        vferr, vf_var_list))
 
     @contextmanager
     def timed(msg):
@@ -238,7 +266,10 @@ def learn(*,
             print(colorize(msg, color='magenta'))
             tstart = time.time()
             yield
-            print(colorize("done in %.3f seconds"%(time.time() - tstart), color='magenta'))
+            print(
+                colorize(
+                    "done in %.3f seconds" % (time.time() - tstart),
+                    color='magenta'))
         else:
             yield
 
@@ -267,16 +298,17 @@ def learn(*,
 
     # Prepare for rollouts
     # ----------------------------------------
-    seg_gen = traj_segment_generator(pi, env, timesteps_per_batch, stochastic=True)
+    seg_gen = traj_segment_generator(
+        pi, env, timesteps_per_batch, stochastic=True)
 
     episodes_so_far = 0
     timesteps_so_far = 0
     iters_so_far = 0
     tstart = time.time()
-    lenbuffer = deque(maxlen=40) # rolling buffer for episode lengths
-    rewbuffer = deque(maxlen=40) # rolling buffer for episode rewards
+    lenbuffer = deque(maxlen=40)  # rolling buffer for episode lengths
+    rewbuffer = deque(maxlen=40)  # rolling buffer for episode rewards
 
-    if sum([max_iters>0, total_timesteps>0, max_episodes>0])==0:
+    if sum([max_iters > 0, total_timesteps > 0, max_episodes > 0]) == 0:
         # noththing to be done
         return pi
 
@@ -291,26 +323,30 @@ def learn(*,
             break
         elif max_iters and iters_so_far >= max_iters:
             break
-        logger.log("********** Iteration %i ************"%iters_so_far)
+        logger.log("********** Iteration %i ************" % iters_so_far)
 
         with timed("sampling"):
             seg = seg_gen.__next__()
         add_vtarg_and_adv(seg, gamma, lam)
 
         # ob, ac, atarg, ret, td1ret = map(np.concatenate, (obs, acs, atargs, rets, td1rets))
-        ob, ac, atarg, tdlamret = seg["ob"], seg["ac"], seg["adv"], seg["tdlamret"]
-        vpredbefore = seg["vpred"] # predicted value function before udpate
-        atarg = (atarg - atarg.mean()) / atarg.std() # standardized advantage function estimate
+        ob, ac, atarg, tdlamret = seg["ob"], seg["ac"], seg["adv"], seg[
+            "tdlamret"]
+        vpredbefore = seg["vpred"]  # predicted value function before udpate
+        atarg = (atarg - atarg.mean()
+                 ) / atarg.std()  # standardized advantage function estimate
 
         if hasattr(pi, "ret_rms"): pi.ret_rms.update(tdlamret)
-        if hasattr(pi, "ob_rms"): pi.ob_rms.update(ob) # update running mean/std for policy
+        if hasattr(pi, "ob_rms"):
+            pi.ob_rms.update(ob)  # update running mean/std for policy
 
         args = seg["ob"], seg["ac"], atarg
         fvpargs = [arr[::5] for arr in args]
+
         def fisher_vector_product(p):
             return allmean(compute_fvp(p, *fvpargs)) + cg_damping * p
 
-        assign_old_eq_new() # set old parameter values to new parameter values
+        assign_old_eq_new()  # set old parameter values to new parameter values
         with timed("computegrad"):
             *lossbefore, g = compute_lossandgrad(*args)
         lossbefore = allmean(np.array(lossbefore))
@@ -319,9 +355,13 @@ def learn(*,
             logger.log("Got zero gradient. not updating")
         else:
             with timed("cg"):
-                stepdir = cg(fisher_vector_product, g, cg_iters=cg_iters, verbose=rank==0)
+                stepdir = cg(
+                    fisher_vector_product,
+                    g,
+                    cg_iters=cg_iters,
+                    verbose=rank == 0)
             assert np.isfinite(stepdir).all()
-            shs = .5*stepdir.dot(fisher_vector_product(stepdir))
+            shs = .5 * stepdir.dot(fisher_vector_product(stepdir))
             lm = np.sqrt(shs / max_kl)
             # logger.log("lagrange multiplier:", lm, "gnorm:", np.linalg.norm(g))
             fullstep = stepdir / lm
@@ -332,9 +372,11 @@ def learn(*,
             for _ in range(10):
                 thnew = thbefore + fullstep * stepsize
                 set_from_flat(thnew)
-                meanlosses = surr, kl, *_ = allmean(np.array(compute_losses(*args)))
+                meanlosses = surr, kl, *_ = allmean(
+                    np.array(compute_losses(*args)))
                 improve = surr - surrbefore
-                logger.log("Expected: %.3f Actual: %.3f"%(expectedimprove, improve))
+                logger.log(
+                    "Expected: %.3f Actual: %.3f" % (expectedimprove, improve))
                 if not np.isfinite(meanlosses).all():
                     logger.log("Got non-finite value of losses -- bad!")
                 elif kl > max_kl * 1.5:
@@ -349,8 +391,10 @@ def learn(*,
                 logger.log("couldn't compute a good step")
                 set_from_flat(thbefore)
             if nworkers > 1 and iters_so_far % 20 == 0:
-                paramsums = MPI.COMM_WORLD.allgather((thnew.sum(), vfadam.getflat().sum())) # list of tuples
-                assert all(np.allclose(ps, paramsums[0]) for ps in paramsums[1:])
+                paramsums = MPI.COMM_WORLD.allgather(
+                    (thnew.sum(), vfadam.getflat().sum()))  # list of tuples
+                assert all(
+                    np.allclose(ps, paramsums[0]) for ps in paramsums[1:])
 
         for (lossname, lossval) in zip(loss_names, meanlosses):
             logger.record_tabular(lossname, lossval)
@@ -358,16 +402,19 @@ def learn(*,
         with timed("vf"):
 
             for _ in range(vf_iters):
-                for (mbob, mbret) in dataset.iterbatches((seg["ob"], seg["tdlamret"]),
-                include_final_partial_batch=False, batch_size=64):
+                for (mbob, mbret) in dataset.iterbatches(
+                    (seg["ob"], seg["tdlamret"]),
+                        include_final_partial_batch=False,
+                        batch_size=64):
                     g = allmean(compute_vflossandgrad(mbob, mbret))
                     vfadam.update(g, vf_stepsize)
 
-        logger.record_tabular("ev_tdlam_before", explained_variance(vpredbefore, tdlamret))
+        logger.record_tabular("ev_tdlam_before",
+                              explained_variance(vpredbefore, tdlamret))
 
-        lrlocal = (seg["ep_lens"], seg["ep_rets"]) # local values
+        lrlocal = (seg["ep_lens"], seg["ep_rets"])  # local values
         if MPI is not None:
-            listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal) # list of tuples
+            listoflrpairs = MPI.COMM_WORLD.allgather(lrlocal)  # list of tuples
         else:
             listoflrpairs = [lrlocal]
 
@@ -386,23 +433,33 @@ def learn(*,
         logger.record_tabular("TimestepsSoFar", timesteps_so_far)
         logger.record_tabular("TimeElapsed", time.time() - tstart)
 
-        if rank==0:
+        if rank == 0:
             logger.dump_tabular()
 
     return pi
 
+
 def flatten_lists(listoflists):
     return [el for list_ in listoflists for el in list_]
+
 
 def get_variables(scope):
     return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope)
 
+
 def get_trainable_variables(scope):
     return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope)
 
+
 def get_vf_trainable_variables(scope):
-    return [v for v in get_trainable_variables(scope) if 'vf' in v.name[len(scope):].split('/')]
+    return [
+        v for v in get_trainable_variables(scope)
+        if 'vf' in v.name[len(scope):].split('/')
+    ]
+
 
 def get_pi_trainable_variables(scope):
-    return [v for v in get_trainable_variables(scope) if 'pi' in v.name[len(scope):].split('/')]
-
+    return [
+        v for v in get_trainable_variables(scope)
+        if 'pi' in v.name[len(scope):].split('/')
+    ]

@@ -1,6 +1,7 @@
+import pickle
+
 import click
 import numpy as np
-import pickle
 
 from baselines import logger
 from baselines.common import set_global_seeds
@@ -24,7 +25,9 @@ def main(policy_file, seed, n_test_rollouts, render):
     # Prepare params.
     params = config.DEFAULT_PARAMS
     if env_name in config.DEFAULT_ENV_PARAMS:
-        params.update(config.DEFAULT_ENV_PARAMS[env_name])  # merge env-specific parameters in
+        params.update(
+            config.
+            DEFAULT_ENV_PARAMS[env_name])  # merge env-specific parameters in
     params['env_name'] = env_name
     params = config.prepare_params(params)
     config.log_params(params, logger=logger)
@@ -42,7 +45,8 @@ def main(policy_file, seed, n_test_rollouts, render):
     for name in ['T', 'gamma', 'noise_eps', 'random_eps']:
         eval_params[name] = params[name]
 
-    evaluator = RolloutWorker(params['make_env'], policy, dims, logger, **eval_params)
+    evaluator = RolloutWorker(params['make_env'], policy, dims, logger,
+                              **eval_params)
     evaluator.seed(seed)
 
     # Run evaluation.

@@ -10,8 +10,7 @@ def main():
         env,
         network=models.mlp(num_layers=1, num_hidden=64),
         total_timesteps=0,
-        load_path='mountaincar_model.pkl'
-    )
+        load_path='mountaincar_model.pkl')
 
     while True:
         obs, done = env.reset(), False
