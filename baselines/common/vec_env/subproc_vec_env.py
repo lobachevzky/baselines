@@ -2,8 +2,6 @@ from multiprocessing import Pipe, Process
 
 import numpy as np
 
-from baselines.ppo2.hsr_wrapper import UnsupervisedEnv
-
 # local
 from . import CloudpickleWrapper, VecEnv
 
@@ -30,7 +28,6 @@ def worker(remote, parent_remote, env_fn_wrapper):
             elif cmd == 'get_spaces':
                 remote.send((env.observation_space, env.action_space))
             elif cmd == 'set_reward_params':
-                assert isinstance(env, UnsupervisedEnv)
                 env.set_reward_params(data)
             else:
                 raise NotImplementedError

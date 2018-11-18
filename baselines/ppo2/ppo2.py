@@ -36,7 +36,7 @@ class Model(object):
     - Save load the model
     """
 
-    def __init__(self, *, policy, reward_function, ob_space, ac_space, nbatch_act, \
+    def __init__(self, *, policy, reward_structure, ob_space, ac_space, nbatch_act, \
                                               nbatch_train,
                  nsteps, ent_coef, vf_coef, max_grad_norm):
         sess = get_session()
@@ -52,7 +52,10 @@ class Model(object):
         # CREATE THE PLACEHOLDERS
         A = train_model.pdtype.sample_placeholder([None])
         ADV = tf.placeholder(tf.float32, [None])
-        R = tf.placeholder(tf.float32, [None])
+        if reward_structure is None:
+            R = tf.placeholder(tf.float32, [None])
+        else:
+            R = reward_structure.function(train_model.X)
         # Keep track of old actor
         OLDNEGLOGPAC = tf.placeholder(tf.float32, [None])
         # Keep track of old critic
@@ -100,9 +103,6 @@ class Model(object):
         clipfrac = tf.reduce_mean(
             tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
 
-        # Total loss
-        loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
-
         def get_train_op(params, loss):
             # UPDATE THE PARAMETERS USING LOSS
             # 2. Build our trainer
@@ -130,11 +130,12 @@ class Model(object):
             params=tf.trainable_variables('ppo2_model'),
             loss=pg_loss - entropy * ent_coef + vf_loss * vf_coef)
 
-        if reward_function:
+        if reward_structure:
+            # reward_structure.params= tf.Print(reward_structure.params,
+            #                                   [reward_structure.params], message='params')
             train_reward = get_train_op(
-                params=tf.trainable_variables('reward'), loss=get_pg_loss(R))
+                params=reward_structure.params, loss=get_pg_loss(R))
             _train = tf.group(_train, train_reward)
-            self.reward = reward_function(act_model.X)
 
         def train(lr,
                   cliprange,
@@ -161,7 +162,7 @@ class Model(object):
                 OLDNEGLOGPAC: neglogpacs,
                 OLDVPRED: values
             }
-            if reward_function:
+            if reward_structure:
                 del td_map[R]
             if states is not None:
                 td_map[train_model.S] = states
@@ -281,7 +282,7 @@ def constfn(val):
 
 def learn(*,
           network,
-          reward_function,
+          reward_structure,
           env,
           total_timesteps,
           eval_env=None,
@@ -381,7 +382,9 @@ def learn(*,
     nbatch_train = nbatch // nminibatches
 
     # Instantiate the model object (that creates act_model and train_model)
-    make_model = lambda: Model(policy=policy, ob_space=ob_space, ac_space=ac_space,
+    make_model = lambda: Model(policy=policy, reward_structure=reward_structure,
+                               ob_space=ob_space,
+                               ac_space=ac_space,
                                nbatch_act=nenvs, nbatch_train=nbatch_train,
                                nsteps=nsteps, ent_coef=ent_coef, vf_coef=vf_coef,
                                max_grad_norm=max_grad_norm)
