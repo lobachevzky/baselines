@@ -8,7 +8,8 @@ import numpy as np
 import tensorflow as tf
 
 from baselines import logger
-from baselines.common import explained_variance, set_global_seeds
+from baselines.common.math_util import explained_variance
+from baselines.common.misc_util import set_global_seeds
 from baselines.common.policies import build_policy
 from baselines.common.runners import AbstractEnvRunner
 from baselines.common.tf_util import get_session, initialize, load_variables, save_variables
@@ -35,7 +36,8 @@ class Model(object):
     - Save load the model
     """
 
-    def __init__(self, *, policy, ob_space, ac_space, nbatch_act, nbatch_train,
+    def __init__(self, *, policy, reward_function, ob_space, ac_space, nbatch_act, \
+                                              nbatch_train,
                  nsteps, ent_coef, vf_coef, max_grad_norm):
         sess = get_session()
 
@@ -83,14 +85,17 @@ class Model(object):
         # Calculate ratio (pi current policy / pi old policy)
         ratio = tf.exp(OLDNEGLOGPAC - neglogpac)
 
-        # Defining Loss = - J is equivalent to max J
-        pg_losses = -ADV * ratio
+        def get_pg_loss(G):
+            # Defining Loss = - J is equivalent to max J
+            pg_losses = -G * ratio
 
-        pg_losses2 = -ADV * tf.clip_by_value(ratio, 1.0 - CLIPRANGE,
-                                             1.0 + CLIPRANGE)
+            pg_losses2 = -G * tf.clip_by_value(ratio, 1.0 - CLIPRANGE,
+                                               1.0 + CLIPRANGE)
 
-        # Final PG loss
-        pg_loss = tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
+            # Final PG loss
+            return tf.reduce_mean(tf.maximum(pg_losses, pg_losses2))
+
+        pg_loss = get_pg_loss(ADV)
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(
             tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
@@ -98,27 +103,38 @@ class Model(object):
         # Total loss
         loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
 
-        # UPDATE THE PARAMETERS USING LOSS
-        # 1. Get the model parameters
-        params = tf.trainable_variables('ppo2_model')
-        # 2. Build our trainer
-        if MPI is not None:
-            trainer = MpiAdamOptimizer(
-                MPI.COMM_WORLD, learning_rate=LR, epsilon=1e-5)
-        else:
-            trainer = tf.train.AdamOptimizer(learning_rate=LR, epsilon=1e-5)
-        # 3. Calculate the gradients
-        grads_and_var = trainer.compute_gradients(loss, params)
-        grads, var = zip(*grads_and_var)
+        def get_train_op(params, loss):
+            # UPDATE THE PARAMETERS USING LOSS
+            # 2. Build our trainer
+            if MPI is not None:
+                trainer = MpiAdamOptimizer(
+                    MPI.COMM_WORLD, learning_rate=LR, epsilon=1e-5)
+            else:
+                trainer = tf.train.AdamOptimizer(
+                    learning_rate=LR, epsilon=1e-5)
+            # 3. Calculate the gradients
+            grads_and_var = trainer.compute_gradients(loss, params)
+            grads, var = zip(*grads_and_var)
 
-        if max_grad_norm is not None:
-            # Clip the gradients (normalize)
-            grads, _grad_norm = tf.clip_by_global_norm(grads, max_grad_norm)
-        grads_and_var = list(zip(grads, var))
-        # zip aggregate each gradient with parameters associated
-        # For instance zip(ABCD, xyza) => Ax, By, Cz, Da
+            if max_grad_norm is not None:
+                # Clip the gradients (normalize)
+                grads, _grad_norm = tf.clip_by_global_norm(
+                    grads, max_grad_norm)
+            grads_and_var = list(zip(grads, var))
+            # zip aggregate each gradient with parameters associated
+            # For instance zip(ABCD, xyza) => Ax, By, Cz, Da
 
-        _train = trainer.apply_gradients(grads_and_var)
+            return trainer.apply_gradients(grads_and_var)
+
+        _train = get_train_op(
+            params=tf.trainable_variables('ppo2_model'),
+            loss=pg_loss - entropy * ent_coef + vf_loss * vf_coef)
+
+        if reward_function:
+            train_reward = get_train_op(
+                params=tf.trainable_variables('reward'), loss=get_pg_loss(R))
+            _train = tf.group(_train, train_reward)
+            self.reward = reward_function(act_model.X)
 
         def train(lr,
                   cliprange,
@@ -145,6 +161,8 @@ class Model(object):
                 OLDNEGLOGPAC: neglogpacs,
                 OLDVPRED: values
             }
+            if reward_function:
+                del td_map[R]
             if states is not None:
                 td_map[train_model.S] = states
                 td_map[train_model.M] = masks
@@ -263,6 +281,7 @@ def constfn(val):
 
 def learn(*,
           network,
+          reward_function,
           env,
           total_timesteps,
           eval_env=None,

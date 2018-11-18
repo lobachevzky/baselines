@@ -7,12 +7,12 @@ import numpy as np
 import tensorflow as tf
 
 from baselines import bench, logger
-from baselines.common import set_global_seeds
+from baselines.common.misc_util import set_global_seeds
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
-from baselines.ppo2.hsr_wrapper import HSREnv, MoveGripperEnv
+from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedEnv, UnsupervisedVecEnv
 from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, parse_activation, parse_groups
 
 
@@ -35,19 +35,33 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, goal_activation,
         inter_op_parallelism_threads=ncpu)
     tf.Session(config=config).__enter__()
 
-    def make_env():
-        return bench.Monitor(
-            TimeLimit(max_episode_steps=max_steps, env=env(**env_args)),
+    def make_env(_seed):
+        _env = bench.Monitor(
+            TimeLimit(
+                max_episode_steps=max_steps, env=env(seed=_seed, **env_args)),
             logger.get_dir(),
             allow_early_resets=True)
+        _env.seed(_seed)
+        return _env
 
-    env = DummyVecEnv([make_env])
+    if env == 'unsupervised':
+        reward_function = UnsupervisedEnv.reward_function
+        env = UnsupervisedVecEnv([make_env(i + seed) for i in range(ncpu)])
+    else:
+        reward_function = None
+        env = DummyVecEnv([make_env])
+
     env = VecNormalize(env)
 
     set_global_seeds(seed)
 
     model = ppo2.learn(
-        network='mlp', env=env, total_timesteps=1e20, eval_env=env, **kwargs)
+        reward_function=reward_function,
+        network='mlp',
+        env=env,
+        total_timesteps=1e20,
+        eval_env=env,
+        **kwargs)
 
     # Run trained model
     logger.log("Running trained model")
@@ -61,7 +75,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, goal_activation,
 
 ENVIRONMENTS = dict(
     move_block=HSREnv,
-    move_gripper=MoveGripperEnv,
+    unsupervised=UnsupervisedEnv,
 )
 
 

@@ -8,6 +8,7 @@ from baselines.common.input import encode_observation, observation_placeholder
 from baselines.common.models import get_network_builder
 from baselines.common.mpi_running_mean_std import RunningMeanStd
 from baselines.common.tf_util import adjust_shape
+from baselines.ppo2.hsr_wrapper import UnsupervisedEnv
 
 
 class PolicyWithValue(object):
@@ -143,8 +144,20 @@ def build_policy(env,
                   observ_placeholder=None):
         ob_space = env.observation_space
 
-        X = observ_placeholder if observ_placeholder is not None else observation_placeholder(
-            ob_space, batch_size=nbatch)
+        # Unsupervised policy replaces desired_goal part of observation with
+        # tf.Variable reward_param
+        if isinstance(env, UnsupervisedEnv):
+            with tf.variable_scope('reward', reuse=tf.AUTO_REUSE):
+                param = tf.get_variable(
+                    'params', shape=(nbatch, ) + env.param_shape)
+            observ_placeholder = observation_placeholder(
+                env.raw_observation_space)
+            X = tf.concat([observ_placeholder, param], axis=1)
+            assert X.shape == ob_space
+        else:
+            X = observ_placeholder if observ_placeholder is not None else \
+                observation_placeholder(
+                ob_space, batch_size=nbatch)
 
         extra_tensors = {}
 
