@@ -1,9 +1,12 @@
+# stdlib
 import functools
 import time
 
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines import logger
 from baselines.a2c.utils import (EpisodeStats, Scheduler, avg_norm, batch_to_seq, cat_entropy_softmax, check_shape,
                                  find_trainable_variables, get_by_index, gradient_add, q_explained_variance,

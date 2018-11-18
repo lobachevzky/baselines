@@ -2,11 +2,14 @@
 An interface for asynchronous vectorized environments.
 """
 
+# stdlib
 import ctypes
 from multiprocessing import Array, Pipe, Process
 
+# third party
 import numpy as np
 
+# first party
 from baselines import logger
 
 # local

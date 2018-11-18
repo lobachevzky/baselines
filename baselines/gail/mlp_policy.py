@@ -3,9 +3,11 @@ from baselines/ppo1/mlp_policy.py and add simple modification
 (1) add reuse argument
 (2) cache the `stochastic` placeholder
 '''
+# third party
 import gym
 import tensorflow as tf
 
+# first party
 from baselines.acktr.utils import dense
 from baselines.common.distributions import make_pdtype
 from baselines.common.mpi_running_mean_std import RunningMeanStd

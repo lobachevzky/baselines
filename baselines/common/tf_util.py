@@ -1,13 +1,14 @@
+# stdlib
 import collections
 import copy
 import functools
 import multiprocessing
 import os
 
+# third party
 import joblib
 import numpy as np
 import tensorflow as tf  # pylint: ignore-module
-
 
 
 def switch(condition, then_expression, else_expression):
@@ -33,12 +34,10 @@ def switch(condition, then_expression, else_expression):
 # ================================================================
 
 
-
 def lrelu(x, leak=0.2):
     f1 = 0.5 * (1 + leak)
     f2 = 0.5 * (1 - leak)
     return f1 * x + f2 * abs(x)
-
 
 
 # ================================================================
@@ -51,7 +50,6 @@ def huber_loss(x, delta=1.0):
     return tf.where(
         tf.abs(x) < delta,
         tf.square(x) * 0.5, delta * (tf.abs(x) - 0.5 * delta))
-
 
 
 # ================================================================
@@ -84,7 +82,6 @@ def make_session(config=None, num_cpu=None, make_default=False, graph=None):
         return tf.Session(config=config, graph=graph)
 
 
-
 def single_threaded_session():
     """Returns a session which will only use a single CPU"""
     return make_session(num_cpu=1)
@@ -99,7 +96,6 @@ def in_session(f):
     return newfunc
 
 
-
 ALREADY_INITIALIZED = set()
 
 
@@ -108,7 +104,6 @@ def initialize():
     new_variables = set(tf.global_variables()) - ALREADY_INITIALIZED
     get_session().run(tf.variables_initializer(new_variables))
     ALREADY_INITIALIZED.update(new_variables)
-
 
 
 # ================================================================
@@ -171,7 +166,6 @@ def conv2d(x,
                 max_images=10)
 
         return tf.nn.conv2d(x, w, stride_shape, pad) + b
-
 
 
 # ================================================================
@@ -253,7 +247,6 @@ class _Function(object):
         return results
 
 
-
 # ================================================================
 # Flat vectors
 # ================================================================
@@ -307,7 +300,6 @@ class SetFromFlat(object):
         tf.get_default_session().run(self.op, feed_dict={self.theta: theta})
 
 
-
 class GetFlat(object):
     def __init__(self, var_list):
         self.op = tf.concat(
@@ -345,7 +337,6 @@ def get_placeholder_cached(name):
     return _PLACEHOLDER_CACHE[name][0]
 
 
-
 # ================================================================
 # Diagnostics
 # ================================================================
@@ -376,7 +367,6 @@ def get_available_gpus():
     from tensorflow.python.client import device_lib
     local_device_protos = device_lib.list_local_devices()
     return [x.name for x in local_device_protos if x.device_type == 'GPU']
-
 
 
 # ================================================================

@@ -1,5 +1,7 @@
+# third party
 import numpy as np
 
+# first party
 from baselines.bench.monitor import load_results
 import matplotlib
 import matplotlib.pyplot as plt
@@ -81,7 +83,6 @@ def plot_results(dirs, num_timesteps, xaxis, yaxis, task_name):
         tslist.append(ts)
     xy_list = [ts2xy(ts, xaxis, yaxis) for ts in tslist]
     plot_curves(xy_list, xaxis, yaxis, task_name)
-
 
 
 # Example usage in jupyter-notebook

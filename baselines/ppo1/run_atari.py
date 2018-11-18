@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 
+# stdlib
 import os.path as osp
 
+# third party
 from mpi4py import MPI
 
+# first party
 from baselines import bench, logger
 from baselines.common import set_global_seeds
 from baselines.common.atari_wrappers import make_atari, wrap_deepmind
 from baselines.common.cmd_util import atari_arg_parser
-
 
 
 def train(env_id, num_timesteps, seed):

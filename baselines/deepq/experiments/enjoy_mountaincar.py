@@ -1,5 +1,7 @@
+# third party
 import gym
 
+# first party
 from baselines import deepq
 from baselines.common import models
 

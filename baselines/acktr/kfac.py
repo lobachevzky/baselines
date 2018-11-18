@@ -1,9 +1,12 @@
+# stdlib
 from functools import reduce
 import re
 
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines.acktr.kfac_utils import *
 
 KFAC_OPS = ['MatMul', 'Conv2D', 'BiasAdd']

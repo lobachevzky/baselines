@@ -1,12 +1,15 @@
+# stdlib
 from collections import deque
 import functools
 import os
 import os.path as osp
 import time
 
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines import logger
 from baselines.common.math_util import explained_variance
 from baselines.common.misc_util import set_global_seeds
@@ -20,7 +23,6 @@ try:
     from baselines.common.mpi_util import sync_from_root
 except ImportError:
     MPI = None
-
 
 
 class Model(object):
@@ -133,7 +135,9 @@ class Model(object):
 
         if reward_structure:
             with tf.control_dependencies([
-                tf.Print(pg_loss, [reward_structure.params], message='update params')
+                    tf.Print(
+                        pg_loss, [reward_structure.params],
+                        message='update params')
             ]):
                 train_reward = get_train_op(
                     params=reward_structure.params, loss=get_pg_loss(R))
@@ -205,6 +209,7 @@ class Runner(AbstractEnvRunner):
     run():
     - Make a mini batch
     """
+
 
 class Runner(object):
     def __init__(self, *, env, model, nsteps, gamma, lam):

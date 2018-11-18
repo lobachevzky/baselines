@@ -2,15 +2,18 @@
 Disclaimer: The trpo part highly rely on trpo_mpi at @openai/baselines
 '''
 
+# stdlib
 from collections import deque
 from contextlib import contextmanager
 import os
 import time
 
+# third party
 from mpi4py import MPI
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines import logger
 from baselines.common import colorize, dataset, explained_variance, fmt_row, zipsame
 from baselines.common.cg import cg

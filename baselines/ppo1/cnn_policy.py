@@ -1,6 +1,8 @@
+# third party
 import gym
 import tensorflow as tf
 
+# first party
 from baselines.common.distributions import make_pdtype
 import baselines.common.tf_util as U
 

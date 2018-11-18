@@ -1,10 +1,13 @@
+# stdlib
 import itertools
 
+# third party
 import gym
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.layers as layers
 
+# first party
 from baselines import deepq, logger
 from baselines.common.schedules import LinearSchedule
 import baselines.common.tf_util as U

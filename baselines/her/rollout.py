@@ -1,9 +1,12 @@
+# stdlib
 from collections import deque
 import pickle
 
+# third party
 from mujoco_py import MujocoException
 import numpy as np
 
+# first party
 from baselines.her.util import convert_episode_to_batch_major, store_args
 
 

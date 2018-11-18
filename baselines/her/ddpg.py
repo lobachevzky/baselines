@@ -1,9 +1,12 @@
+# stdlib
 from collections import OrderedDict
 
+# third party
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib.staging import StagingArea
 
+# first party
 from baselines import logger
 from baselines.common.mpi_adam import MpiAdam
 from baselines.her.normalizer import Normalizer

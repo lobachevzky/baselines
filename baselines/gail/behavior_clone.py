@@ -2,15 +2,18 @@
 The code is used to train BC imitator, or pretrained GAIL imitator
 '''
 
+# stdlib
 import argparse
 import logging
 import os.path as osp
 import tempfile
 
+# third party
 import gym
 import tensorflow as tf
 from tqdm import tqdm
 
+# first party
 from baselines import bench, logger
 from baselines.common import set_global_seeds
 from baselines.common import tf_util as U

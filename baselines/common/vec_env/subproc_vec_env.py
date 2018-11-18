@@ -1,5 +1,7 @@
+# stdlib
 from multiprocessing import Pipe, Process
 
+# third party
 import numpy as np
 
 # local

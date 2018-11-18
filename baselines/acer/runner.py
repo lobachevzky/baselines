@@ -1,6 +1,8 @@
+# third party
 from gym import spaces
 import numpy as np
 
+# first party
 from baselines.common.runners import AbstractEnvRunner
 from baselines.common.vec_env.vec_frame_stack import VecFrameStack
 

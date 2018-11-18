@@ -1,12 +1,15 @@
+# stdlib
 import json
 import os
 from subprocess import CalledProcessError
 import sys
 
+# third party
 import click
 from mpi4py import MPI
 import numpy as np
 
+# first party
 from baselines import logger
 from baselines.common import set_global_seeds
 from baselines.common.mpi_moments import mpi_moments

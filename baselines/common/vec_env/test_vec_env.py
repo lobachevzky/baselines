@@ -2,9 +2,11 @@
 Tests for asynchronous vectorized environments.
 """
 
+# third party
 import gym
 import numpy as np
 
+# first party
 import pytest
 
 # local

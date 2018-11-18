@@ -1,10 +1,10 @@
+# third party
 from gym import spaces
 import numpy as np
 
 # local
 from . import VecEnv
 from .util import copy_obs_dict, dict_to_obs, obs_space_info
-
 
 
 class DummyVecEnv(VecEnv):

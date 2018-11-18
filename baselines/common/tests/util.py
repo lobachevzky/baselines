@@ -1,7 +1,9 @@
+# third party
 from gym.spaces import np_random
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 
 N_TRIALS = 10000

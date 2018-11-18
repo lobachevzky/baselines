@@ -1,9 +1,12 @@
+# stdlib
 import functools
 import os.path as osp
 import time
 
+# third party
 import tensorflow as tf
 
+# first party
 from baselines import logger
 from baselines.a2c.runner import Runner
 from baselines.a2c.utils import Scheduler, find_trainable_variables

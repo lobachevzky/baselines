@@ -1,9 +1,12 @@
+# stdlib
 import argparse
 import json
 import os
 
+# third party
 import numpy as np
 
+# first party
 import glob2
 import matplotlib.pyplot as plt
 import seaborn as sns

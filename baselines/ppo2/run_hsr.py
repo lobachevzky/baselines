@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
+# stdlib
 import argparse
 import multiprocessing
 
-import numpy as np
-import tensorflow as tf
-from environments import hindsight_wrapper as hw
+# third party
 from environments.hsr import Observation
 from gym.wrappers import TimeLimit
-from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, \
-    parse_activation, parse_groups
+import numpy as np
+from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, parse_activation, parse_groups
+import tensorflow as tf
 
+# first party
 from baselines import logger
 from baselines.bench.monitor import Monitor
 from baselines.common.misc_util import set_global_seeds
 from baselines.common.models import mlp
-from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
-from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedEnv, UnsupervisedDummyVecEnv, \
-    UnsupervisedVecEnv
+from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedVecEnv
 
 
 def parse_lr(string: str) -> callable:
@@ -35,14 +34,13 @@ class RewardStructure:
             self.params = tf.get_variable('params', shape=param_shape)
 
     def function(self, X: tf.Tensor):
-        achieved = Observation(
-            *tf.split(X, self.subspace_sizes, axis=1)).goal
+        achieved = Observation(*tf.split(X, self.subspace_sizes, axis=1)).goal
         return -tf.reduce_sum(tf.square(achieved - self.params))
 
 
 @env_wrapper
-def main(max_steps, seed, logdir, env, ncpu, goal_lr,
-         env_args, network_args, **kwargs):
+def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
+         **kwargs):
     format_strs = ['stdout']
     if logdir:
         format_strs += ['tensorboard']
@@ -58,8 +56,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr,
 
     def make_env():
         _env = Monitor(
-            TimeLimit(
-                max_episode_steps=max_steps, env=env(**env_args)),
+            TimeLimit(max_episode_steps=max_steps, env=env(**env_args)),
             logger.get_dir(),
             allow_early_resets=True)
         _env.seed(seed)
@@ -67,14 +64,15 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr,
 
     if env is UnsupervisedEnv:
         assert isinstance(sample_env, UnsupervisedEnv)
-        reward_structure = RewardStructure(subspace_sizes=sample_env.subspace_sizes)
+        reward_structure = RewardStructure(
+            subspace_sizes=sample_env.subspace_sizes)
         env = UnsupervisedVecEnv([make_env for _ in range(ncpu)],
                                  reward_params=reward_structure.params)
 
         def network(X: tf.Tensor):
             nbatch = tf.shape(X)[0]
-            reward_params = tf.tile(tf.expand_dims(reward_structure.params, axis=0),
-                                    [nbatch, 1])
+            reward_params = tf.tile(
+                tf.expand_dims(reward_structure.params, axis=0), [nbatch, 1])
             inputs = tf.concat([X, reward_params], axis=1)
             return mlp(**network_args)(inputs)
 
@@ -99,7 +97,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr,
 
     # Run trained model
     logger.log("Running trained model")
-    obs = np.zeros((1,) + env.observation_space.shape)
+    obs = np.zeros((1, ) + env.observation_space.shape)
     obs[:] = env.reset()
     while True:
         actions = model.step(obs)[0]

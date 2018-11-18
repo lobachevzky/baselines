@@ -1,7 +1,10 @@
+# stdlib
 import os
 
+# third party
 from gym.wrappers.monitoring import video_recorder
 
+# first party
 from baselines import logger
 from baselines.common.vec_env import VecEnvWrapper
 

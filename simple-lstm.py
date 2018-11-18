@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 
+# third party
 import tensorflow as tf
 from tensorflow.python.ops.rnn_cell_impl import LSTMStateTuple
 

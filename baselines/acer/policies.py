@@ -1,6 +1,8 @@
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines.a2c.utils import batch_to_seq, fc, lstm, sample, seq_to_batch
 from baselines.common.policies import nature_cnn
 

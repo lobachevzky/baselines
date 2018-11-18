@@ -1,7 +1,8 @@
+# third party
 import gym
 import tensorflow as tf
-from sac.utils import get_env_attr
 
+# first party
 from baselines.a2c.utils import fc
 from baselines.common import tf_util
 from baselines.common.distributions import make_pdtype
@@ -9,8 +10,7 @@ from baselines.common.input import encode_observation, observation_placeholder
 from baselines.common.models import get_network_builder
 from baselines.common.mpi_running_mean_std import RunningMeanStd
 from baselines.common.tf_util import adjust_shape
-from baselines.ppo2.hsr_wrapper import UnsupervisedEnv, UnsupervisedDummyVecEnv, \
-    UnsupervisedVecEnv
+from baselines.ppo2.hsr_wrapper import UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedVecEnv
 
 
 class PolicyWithValue(object):

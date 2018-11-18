@@ -2,12 +2,15 @@
 Tests for asynchronous vectorized environments.
 """
 
+# stdlib
 import glob
 import os
 import tempfile
 
+# third party
 import gym
 
+# first party
 import pytest
 
 # local

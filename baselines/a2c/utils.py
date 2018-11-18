@@ -1,6 +1,8 @@
+# stdlib
 from collections import deque
 import os
 
+# third party
 import numpy as np
 import tensorflow as tf
 
@@ -81,7 +83,6 @@ def fc(x, scope, nh, *, init_scale=1.0, init_bias=0.0):
         b = tf.get_variable(
             "b", [nh], initializer=tf.constant_initializer(init_bias))
         return tf.matmul(x, w) + b
-
 
 
 def batch_to_seq(h, nbatch, nsteps, flat=False):
@@ -198,7 +199,6 @@ def discount_with_dones(rewards, dones, gamma):
 
 def find_trainable_variables(key):
     return tf.trainable_variables(key)
-
 
 
 def make_path(f):

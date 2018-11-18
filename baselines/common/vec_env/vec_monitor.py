@@ -1,7 +1,10 @@
+# stdlib
 import time
 
+# third party
 import numpy as np
 
+# first party
 from baselines.bench.monitor import ResultsWriter
 
 # local

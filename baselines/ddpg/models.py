@@ -1,5 +1,7 @@
+# third party
 import tensorflow as tf
 
+# first party
 from baselines.common.models import get_network_builder
 
 

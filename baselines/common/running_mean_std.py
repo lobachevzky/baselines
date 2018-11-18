@@ -1,6 +1,8 @@
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines.common.tf_util import get_session
 
 

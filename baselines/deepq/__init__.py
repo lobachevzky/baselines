@@ -5,7 +5,6 @@ from baselines.deepq.replay_buffer import ReplayBuffer, PrioritizedReplayBuffer 
 from baselines.deepq.simple import learn, load  # noqa
 
 
-
 def wrap_atari_dqn(env):
     from baselines.common.atari_wrappers import wrap_deepmind
     return wrap_deepmind(env, frame_stack=True, scale=True)

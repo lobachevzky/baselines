@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
+# stdlib
 import os
 
+# third party
 import gym
 
+# first party
 from baselines import logger
 from baselines.common import tf_util as U
 from baselines.common.cmd_util import make_mujoco_env, mujoco_arg_parser

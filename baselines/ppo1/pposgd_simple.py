@@ -1,10 +1,13 @@
+# stdlib
 from collections import deque
 import time
 
+# third party
 from mpi4py import MPI
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines import logger
 from baselines.common import Dataset, explained_variance, fmt_row, zipsame
 from baselines.common.mpi_adam import MpiAdam

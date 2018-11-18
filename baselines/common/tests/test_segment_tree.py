@@ -1,5 +1,7 @@
+# third party
 import numpy as np
 
+# first party
 from baselines.common.segment_tree import MinSegmentTree, SumSegmentTree
 
 

@@ -1,10 +1,13 @@
+# stdlib
 from collections import deque
 from contextlib import contextmanager
 import time
 
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines import logger
 from baselines.common import colorize, dataset, explained_variance, set_global_seeds, zipsame
 from baselines.common.cg import cg

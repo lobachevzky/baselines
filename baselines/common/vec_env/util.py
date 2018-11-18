@@ -2,8 +2,10 @@
 Helpers for dealing with vectorized environments.
 """
 
+# stdlib
 from collections import OrderedDict
 
+# third party
 import gym
 import numpy as np
 

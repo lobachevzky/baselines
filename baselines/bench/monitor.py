@@ -1,11 +1,13 @@
 __all__ = ['Monitor', 'get_monitor_files', 'load_results']
 
+# stdlib
 import csv
 from glob import glob
 import json
 import os.path as osp
 import time
 
+# third party
 import gym
 from gym.core import Wrapper
 

@@ -1,6 +1,8 @@
+# stdlib
 from collections import deque
 import os
 
+# third party
 import cv2
 import gym
 from gym import spaces

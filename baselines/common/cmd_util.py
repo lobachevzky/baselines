@@ -2,11 +2,14 @@
 Helpers for scripts like run_atari.py.
 """
 
+# stdlib
 import os
 
+# third party
 import gym
 from gym.wrappers import FlattenDictWrapper
 
+# first party
 from baselines import logger
 from baselines.bench import Monitor
 from baselines.common import retro_wrappers, set_global_seeds

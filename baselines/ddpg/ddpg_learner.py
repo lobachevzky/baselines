@@ -1,10 +1,13 @@
+# stdlib
 from copy import copy
 from functools import reduce
 
+# third party
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib as tc
 
+# first party
 from baselines import logger
 from baselines.common.mpi_adam import MpiAdam
 from baselines.common.mpi_running_mean_std import RunningMeanStd

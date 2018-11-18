@@ -1,6 +1,8 @@
+# third party
 import gym
 import tensorflow as tf
 
+# first party
 from baselines.common.distributions import make_pdtype
 from baselines.common.mpi_running_mean_std import RunningMeanStd
 import baselines.common.tf_util as U

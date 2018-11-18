@@ -1,9 +1,11 @@
+# stdlib
 import os
 import pickle
 import random
 import tempfile
 import zipfile
 
+# third party
 import gym
 import numpy as np
 

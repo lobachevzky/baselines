@@ -1,11 +1,14 @@
+# stdlib
 import os
 import tempfile
 import zipfile
 
+# third party
 import cloudpickle
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines import deepq, logger
 from baselines.common import set_global_seeds
 from baselines.common.schedules import LinearSchedule

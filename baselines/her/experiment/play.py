@@ -1,8 +1,11 @@
+# stdlib
 import pickle
 
+# third party
 import click
 import numpy as np
 
+# first party
 from baselines import logger
 from baselines.common import set_global_seeds
 import baselines.her.experiment.config as config

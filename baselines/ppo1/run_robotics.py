@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 
+# third party
 from mpi4py import MPI
 import mujoco_py
 
+# first party
 from baselines.common import set_global_seeds
 from baselines.common.cmd_util import make_robotics_env, robotics_arg_parser
 

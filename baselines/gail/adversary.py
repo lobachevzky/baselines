@@ -2,9 +2,11 @@
 Reference: https://github.com/openai/imitation
 I follow the architecture from the official repository
 '''
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines.common import tf_util as U
 from baselines.common.mpi_running_mean_std import RunningMeanStd
 

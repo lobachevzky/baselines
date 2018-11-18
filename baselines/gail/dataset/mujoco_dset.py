@@ -5,8 +5,10 @@ the values of each item is a list storing the expert trajectory sequentially
 a transition can be: (data['obs'][t], data['acs'][t], data['obs'][t+1]) and get reward data['rews'][t]
 '''
 
+# third party
 import numpy as np
 
+# first party
 from baselines import logger
 
 

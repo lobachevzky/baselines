@@ -1,10 +1,13 @@
+# stdlib
 from collections import defaultdict, namedtuple
 import json
 import os
 import os.path as osp
 
+# third party
 import numpy as np
 
+# first party
 from baselines.bench import monitor
 from baselines.logger import read_csv, read_json
 import matplotlib.pyplot as plt

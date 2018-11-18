@@ -1,8 +1,10 @@
-import numpy as np
-import tensorflow as tf
+# third party
 from environments import hsr
-from sac.utils import concat_spaces, vectorize, space_shape, get_env_attr, unwrap_env
+import numpy as np
+from sac.utils import concat_spaces, space_shape, unwrap_env, vectorize
+import tensorflow as tf
 
+# first party
 from baselines.common.tf_util import get_session
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
@@ -13,7 +15,8 @@ class HSREnv(hsr.HSREnv):
         super().__init__(**kwargs)
 
         # Sadly, ppo code really likes boxes, so had to concatenate things
-        self.observation_space = concat_spaces(self.observation_space.spaces, axis=0)
+        self.observation_space = concat_spaces(
+            self.observation_space.spaces, axis=0)
 
     def step(self, action):
         s, r, t, i = super().step(action)
@@ -80,8 +83,10 @@ class UnsupervisedDummyVecEnv(DummyVecEnv):
     def __init__(self, env_fns, reward_params: tf.Tensor):
         super().__init__(env_fns)
         self.params = reward_params
-        self.unwrapped_envs = [unwrap_env(env, lambda e: isinstance(e, UnsupervisedEnv))
-                               for env in self.envs]
+        self.unwrapped_envs = [
+            unwrap_env(env, lambda e: isinstance(e, UnsupervisedEnv))
+            for env in self.envs
+        ]
 
     def reset(self):
         params = get_session().run(self.params)

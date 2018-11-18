@@ -1,11 +1,14 @@
+# stdlib
 from functools import partial
 import os
 import tempfile
 
+# third party
 import gym
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines.common.tests.envs.mnist_env import MnistEnv
 from baselines.common.tf_util import get_session, make_session
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv

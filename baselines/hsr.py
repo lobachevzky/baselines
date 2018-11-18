@@ -10,6 +10,7 @@ from typing import List, Tuple
 from xml.etree import ElementTree as ET
 
 # third party
+from environments.hsr import HSREnv, MultiBlockHSREnv
 from gym import spaces
 from gym.spaces import Box
 from gym.wrappers import TimeLimit
@@ -20,7 +21,6 @@ import tensorflow as tf
 from baselines import logger
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.ppo2.ppo2 import learn
-from environments.hsr import HSREnv, MultiBlockHSREnv
 
 
 def make_box(*tuples: Tuple[float, float]):

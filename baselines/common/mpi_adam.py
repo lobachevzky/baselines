@@ -1,6 +1,8 @@
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 import baselines.common.tf_util as U
 
 try:

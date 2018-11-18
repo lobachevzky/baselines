@@ -1,9 +1,12 @@
+# stdlib
 import threading
 
+# third party
 from mpi4py import MPI
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines.her.util import reshape_for_broadcasting
 
 

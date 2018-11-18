@@ -1,5 +1,7 @@
+# stdlib
 import threading
 
+# third party
 import numpy as np
 
 

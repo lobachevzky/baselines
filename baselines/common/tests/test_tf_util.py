@@ -1,6 +1,8 @@
 # tests for tf_util
+# third party
 import tensorflow as tf
 
+# first party
 from baselines.common.tf_util import function, initialize, single_threaded_session
 
 

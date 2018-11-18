@@ -2,15 +2,18 @@
 Disclaimer: this code is highly based on trpo_mpi at @openai/baselines and @openai/imitation
 '''
 
+# stdlib
 import argparse
 import logging
 import os.path as osp
 
+# third party
 import gym
 from mpi4py import MPI
 import numpy as np
 from tqdm import tqdm
 
+# first party
 from baselines import bench, logger
 from baselines.common import set_global_seeds
 from baselines.common import tf_util as U

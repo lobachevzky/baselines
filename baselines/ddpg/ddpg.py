@@ -1,10 +1,13 @@
+# stdlib
 from collections import deque
 import os
 import pickle
 import time
 
+# third party
 import numpy as np
 
+# first party
 from baselines import logger
 from baselines.common import set_global_seeds
 import baselines.common.tf_util as U

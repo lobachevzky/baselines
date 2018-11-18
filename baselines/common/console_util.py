@@ -1,10 +1,12 @@
 from __future__ import print_function
 
+# stdlib
 from contextlib import contextmanager
 import shlex
 import subprocess
 import time
 
+# third party
 import numpy as np
 
 # ================================================================

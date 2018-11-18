@@ -93,8 +93,10 @@ The functions in this file can are used to create the following functions:
     Q' is set to Q once every 10000 updates training steps.
 
 """
+# third party
 import tensorflow as tf
 
+# first party
 import baselines.common.tf_util as U
 
 

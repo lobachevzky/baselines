@@ -1,7 +1,9 @@
+# stdlib
 from distutils.version import StrictVersion
 import re
 import sys
 
+# third party
 # ensure there is some tensorflow build with version above 1.4
 import pkg_resources
 from setuptools import find_packages, setup

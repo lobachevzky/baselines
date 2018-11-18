@@ -1,6 +1,8 @@
+# stdlib
 import os.path as osp
 import tempfile
 
+# third party
 from gym import Env
 from gym.spaces import Box, Discrete
 import numpy as np

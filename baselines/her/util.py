@@ -1,3 +1,4 @@
+# stdlib
 import functools
 import importlib
 import inspect
@@ -5,9 +6,11 @@ import os
 import subprocess
 import sys
 
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines.common import tf_util as U
 
 

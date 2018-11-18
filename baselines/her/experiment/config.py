@@ -1,6 +1,8 @@
+# third party
 import gym
 import numpy as np
 
+# first party
 from baselines import logger
 from baselines.her.ddpg import DDPG
 from baselines.her.her import make_sample_her_transitions

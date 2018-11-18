@@ -3,14 +3,17 @@ This code is used to evalaute the imitators trained with different number of tra
 and plot the results in the same figure for easy comparison.
 '''
 
+# stdlib
 import argparse
 import glob
 import os
 
+# third party
 import gym
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines.common import set_global_seeds
 from baselines.common import tf_util as U
 from baselines.common.misc_util import boolean_flag

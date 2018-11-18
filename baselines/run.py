@@ -1,13 +1,16 @@
+# stdlib
 from collections import defaultdict
 from importlib import import_module
 import multiprocessing
 import os.path as osp
 import sys
 
+# third party
 import gym
 import numpy as np
 import tensorflow as tf
 
+# first party
 from baselines import logger
 from baselines.common.cmd_util import common_arg_parser, make_env, make_vec_env, parse_unknown_args
 from baselines.common.tf_util import get_session

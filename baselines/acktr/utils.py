@@ -1,3 +1,4 @@
+# third party
 import tensorflow as tf
 
 
@@ -29,7 +30,6 @@ def dense(x,
                 weight_decay)
 
         return tf.nn.bias_add(tf.matmul(x, w), b)
-
 
 
 def kl_div(action_dist1, action_dist2, action_size):

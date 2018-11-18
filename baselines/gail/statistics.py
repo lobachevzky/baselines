@@ -2,9 +2,11 @@
 This code is highly based on https://github.com/carpedm20/deep-rl-tensorflow/blob/master/agents/statistic.py
 '''
 
+# third party
 import numpy as np
 import tensorflow as tf
 
+# first party
 import baselines.common.tf_util as U
 
 
