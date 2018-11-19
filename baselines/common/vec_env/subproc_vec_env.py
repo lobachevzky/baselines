@@ -5,6 +5,8 @@ from multiprocessing import Pipe, Process
 import numpy as np
 
 # local
+from sac.utils import unwrap_env
+
 from . import CloudpickleWrapper, VecEnv
 
 
@@ -29,6 +31,9 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 break
             elif cmd == 'get_spaces':
                 remote.send((env.observation_space, env.action_space))
+            elif cmd == 'set_reward_params':
+                unwrap_env(env, lambda e: hasattr(e, 'set_reward_params')
+                           ).set_reward_params(data)
             else:
                 raise NotImplementedError
     except KeyboardInterrupt:

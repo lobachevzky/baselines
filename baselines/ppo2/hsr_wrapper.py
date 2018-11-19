@@ -9,7 +9,7 @@ from baselines.common.tf_util import get_session
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from environments import hsr
-from sac.utils import concat_spaces, space_shape, vectorize
+from sac.utils import concat_spaces, space_shape, vectorize, unwrap_env
 
 
 class HSREnv(hsr.HSREnv):
@@ -57,9 +57,8 @@ class UnsupervisedEnv(hsr.HSREnv):
         self.reward_params = 7 * np.ones(3)
         self.sess = get_session()
 
-    def step(self, step_data: StepData):
-        self.reward_params = step_data.reward_params
-        s, r, t, i = super().step(step_data.actions)
+    def step(self, actions):
+        s, r, t, i = super().step(actions)
         print('step')
         print('self.goal', self.goal)
         print('s.goal', s.goal)
@@ -71,13 +70,8 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     def reset(self):
         o = super().reset()
-        print('reset')
-        print('o', o)
-        return vectorize(
-            Observation(
-                observation=o.observation,
-                params=o.goal,
-                achieved=self.achieved_goal()))
+        n = vectorize(Observation(observation=o.observation, params=o.goal, achieved=self.achieved_goal()))
+        return n
 
     def compute_reward(self):
         return -np.sum(np.square(self.reward_params - self.achieved_goal()))
@@ -92,6 +86,10 @@ class UnsupervisedEnv(hsr.HSREnv):
         print('new goal params', self.reward_params)
         return self.reward_params
 
+    def set_reward_params(self, param):
+        self.reward_params = param
+        self.set_goal(param)
+
 
 class UnsupervisedSubprocVecEnv(SubprocVecEnv):
     def __init__(self, env_fns, reward_params: tf.Tensor):
@@ -99,13 +97,10 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         self.params = reward_params
         self.sess = get_session()
 
-    def step_async(self, actions):
+    def set_reward_params(self):
         params = self.sess.run(self.params)
-        super().step_async([
-            StepData(actions=action, reward_params=params[i])
-            for i, action in enumerate(actions)
-        ])
-
+        for remote, param in zip(self.remotes, params):
+            remote.send(('set_reward_params', param))
 
 class UnsupervisedDummyVecEnv(DummyVecEnv):
     def __init__(self, env_fns, reward_params: tf.Tensor):
@@ -113,9 +108,10 @@ class UnsupervisedDummyVecEnv(DummyVecEnv):
         self.params = reward_params
         self.sess = get_session()
 
-    def step_async(self, actions):
+    def set_reward_params(self):
         params = self.sess.run(self.params)
-        super().step_async([
-            StepData(actions=action, reward_params=params[i])
-            for i, action in enumerate(actions)
-        ])
+        for env, param in zip(self.envs, params):
+            _env = unwrap_env(env, lambda e: hasattr(e, 'set_reward_params'))
+            _env.set_reward_params(param)
+
+

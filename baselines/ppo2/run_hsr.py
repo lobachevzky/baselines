@@ -38,6 +38,7 @@ class RewardStructure:
             subspace_sizes: Iterable,
     ):
         self.subspace_sizes = subspace_sizes
+        self.trained = False
         param_shape = (Observation(*subspace_sizes).params, )
         assert np.shape(params) == param_shape
         with tf.variable_scope('reward'):

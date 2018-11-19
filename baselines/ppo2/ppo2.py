@@ -10,6 +10,8 @@ import numpy as np
 import tensorflow as tf
 
 # first party
+from sac.utils import unwrap_env
+
 from baselines import logger
 from baselines.common.math_util import explained_variance
 from baselines.common.misc_util import set_global_seeds
@@ -184,8 +186,8 @@ class Model(object):
             if states is not None:
                 td_map[train_model.S] = states
                 td_map[train_model.M] = masks
-            return sess.run(
-                [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train],
+            fetches = [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train]
+            return sess.run(fetches,
                 td_map)[:-1]
 
         self.loss_names = [
@@ -238,6 +240,7 @@ class Runner(AbstractEnvRunner):
         for _ in range(self.nsteps):
             # Given observations, get action value and neglopacs
             # We already have self.obs because Runner superclass run self.obs[:] = env.reset() on init
+
             actions, values, self.states, neglogpacs = self.model.step(
                 self.obs, S=self.states, M=self.dones, idxs=idxs)
             mb_obs.append(self.obs.copy())
@@ -480,6 +483,12 @@ def learn(*,
                     mbstates = states[mbenvinds]
                     mblossvals.append(
                         model.train(lrnow, cliprangenow, *slices, mbstates))
+
+        if reward_structure:
+            vec_env = unwrap_env(env, lambda e: hasattr(e, 'set_reward_params'))
+            vec_env.set_reward_params()
+            import ipdb; ipdb.set_trace()
+
 
         # Feedforward --> get losses --> update
         lossvals = np.mean(mblossvals, axis=0)
