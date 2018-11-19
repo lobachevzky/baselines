@@ -63,8 +63,6 @@ class UnsupervisedEnv(hsr.HSREnv):
         print('step')
         print('self.goal', self.goal)
         print('s.goal', s.goal)
-        import ipdb
-        ipdb.set_trace()
         return vectorize(
             Observation(
                 observation=s.observation,
@@ -75,8 +73,6 @@ class UnsupervisedEnv(hsr.HSREnv):
         o = super().reset()
         print('reset')
         print('o', o)
-        import ipdb
-        ipdb.set_trace()
         return vectorize(
             Observation(
                 observation=o.observation,
