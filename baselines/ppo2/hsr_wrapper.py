@@ -31,6 +31,7 @@ class HSREnv(hsr.HSREnv):
 class MoveGripperEnv(HSREnv, hsr.MoveGripperEnv):
     pass
 
+
 StepData = namedtuple('StepData', 'actions reward_params')
 
 
@@ -62,9 +63,6 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     def step(self, actions):
         s, r, t, i = super().step(actions)
-        print('step')
-        print('self.goal', self.goal)
-        print('s.goal', s.goal)
         return vectorize(
             Observation(
                 observation=s.observation,
@@ -73,7 +71,11 @@ class UnsupervisedEnv(hsr.HSREnv):
 
     def reset(self):
         o = super().reset()
-        n = vectorize(Observation(observation=o.observation, params=o.goal, achieved=self.achieved_goal()))
+        n = vectorize(
+            Observation(
+                observation=o.observation,
+                params=o.goal,
+                achieved=self.achieved_goal()))
         return n
 
     def compute_reward(self):
@@ -86,7 +88,6 @@ class UnsupervisedEnv(hsr.HSREnv):
         return self.gripper_pos()
 
     def new_goal(self):
-        print('new goal params', self.reward_params)
         return self.reward_params
 
     def set_reward_params(self, param):
@@ -105,6 +106,7 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
         for remote, param in zip(self.remotes, params):
             remote.send(('set_reward_params', param))
 
+
 class UnsupervisedDummyVecEnv(DummyVecEnv):
     def __init__(self, env_fns, reward_params: tf.Tensor):
         super().__init__(env_fns)
@@ -116,5 +118,3 @@ class UnsupervisedDummyVecEnv(DummyVecEnv):
         for env, param in zip(self.envs, params):
             _env = unwrap_env(env, lambda e: hasattr(e, 'set_reward_params'))
             _env.set_reward_params(param)
-
-

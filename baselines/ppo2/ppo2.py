@@ -140,7 +140,7 @@ class Model(object):
 
             return trainer.apply_gradients(grads_and_var)
 
-        _train = get_train_op(
+        train_agent = get_train_op(
             params=tf.trainable_variables('ppo2_model'),
             loss=pg_loss - entropy * ent_coef + vf_loss * vf_coef)
 
@@ -152,7 +152,6 @@ class Model(object):
             ]):
                 train_reward = get_train_op(
                     params=reward_structure.params, loss=get_pg_loss(R))
-                _train = tf.group(_train, train_reward)
 
         def train(lr,
                   cliprange,
@@ -186,9 +185,14 @@ class Model(object):
             if states is not None:
                 td_map[train_model.S] = states
                 td_map[train_model.M] = masks
-            fetches = [pg_loss, vf_loss, entropy, approxkl, clipfrac, _train]
-            return sess.run(fetches,
-                td_map)[:-1]
+            fetches = [
+                pg_loss, vf_loss, entropy, approxkl, clipfrac, train_agent
+            ]
+            if not reward_structure.trained:
+                fetches.append(train_reward)
+                reward_structure.trained = True
+                return sess.run(fetches, td_map)[:-2]
+            return sess.run(fetches, td_map)[:-1]
 
         self.loss_names = [
             'policy_loss', 'value_loss', 'policy_entropy', 'approxkl',
@@ -485,10 +489,10 @@ def learn(*,
                         model.train(lrnow, cliprangenow, *slices, mbstates))
 
         if reward_structure:
-            vec_env = unwrap_env(env, lambda e: hasattr(e, 'set_reward_params'))
+            vec_env = unwrap_env(env,
+                                 lambda e: hasattr(e, 'set_reward_params'))
             vec_env.set_reward_params()
-            import ipdb; ipdb.set_trace()
-
+            reward_structure.trained = False
 
         # Feedforward --> get losses --> update
         lossvals = np.mean(mblossvals, axis=0)
