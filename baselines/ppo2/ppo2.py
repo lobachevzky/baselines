@@ -188,7 +188,7 @@ class Model(object):
             fetches = [
                 pg_loss, vf_loss, entropy, approxkl, clipfrac, train_agent
             ]
-            if not reward_structure.trained:
+            if reward_structure and not reward_structure.trained:
                 fetches.append(train_reward)
                 reward_structure.trained = True
                 return sess.run(fetches, td_map)[:-2]
