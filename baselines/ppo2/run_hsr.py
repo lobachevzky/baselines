@@ -4,6 +4,7 @@
 import argparse
 import multiprocessing
 import sys
+from typing import Iterable
 
 from gym.wrappers import TimeLimit
 import numpy as np
@@ -29,16 +30,18 @@ def parse_lr(string: str) -> callable:
 
 
 class RewardStructure:
-    def __init__(self, subspace_sizes):
+    def __init__(self, nenv: int, subspace_sizes: Iterable):
         self.subspace_sizes = subspace_sizes
         param_shape = [Observation(*subspace_sizes).achieved]
         with tf.variable_scope('reward'):
-            self.params = tf.get_variable('params', shape=param_shape)
+            self.params = tf.get_variable(
+                'params', shape=(nenv,) + param_shape)
 
-    def function(self, X: tf.Tensor):
+    def function(self, X: tf.Tensor, idxs: tf.Tensor):
         achieved = Observation(
             *tf.split(X, self.subspace_sizes, axis=1)).achieved
-        return -tf.reduce_sum(tf.square(achieved - self.params))
+        params = tf.gather(self.params, idxs)
+        return -tf.reduce_sum(tf.square(achieved - params))
 
 
 @env_wrapper

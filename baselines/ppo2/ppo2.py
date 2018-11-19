@@ -43,14 +43,13 @@ class Model(object):
                                               nbatch_train,
                  nsteps, ent_coef, vf_coef, max_grad_norm):
         sess = get_session()
-
         with tf.variable_scope('ppo2_model', reuse=tf.AUTO_REUSE):
             # CREATE OUR TWO MODELS
             # act_model that is used for sampling
-            act_model = policy(nbatch_act, 1, sess)
+            act_model = policy(nbatch_act, 1, sess, reward_structure)
 
             # Train model for training
-            train_model = policy(nbatch_train, nsteps, sess)
+            train_model = policy(nbatch_train, nsteps, sess, reward_structure)
 
         # CREATE THE PLACEHOLDERS
         A = train_model.pdtype.sample_placeholder([None])
@@ -58,7 +57,7 @@ class Model(object):
         if reward_structure is None:
             R = tf.placeholder(tf.float32, [None])
         else:
-            R = reward_structure.function(train_model.X)
+            R = reward_structure.function(train_model.X, IDX)
         # Keep track of old actor
         OLDNEGLOGPAC = tf.placeholder(tf.float32, [None])
         # Keep track of old critic
@@ -151,6 +150,7 @@ class Model(object):
                   actions,
                   values,
                   neglogpacs,
+                  mbinds,
                   states=None):
             # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
             # Returns = R + yV(s')
@@ -166,10 +166,11 @@ class Model(object):
                 LR: lr,
                 CLIPRANGE: cliprange,
                 OLDNEGLOGPAC: neglogpacs,
-                OLDVPRED: values
+                OLDVPRED: values,
             }
             if reward_structure:
                 del td_map[R]
+                td_map[train_model.idxs] = mbinds
             if states is not None:
                 td_map[train_model.S] = states
                 td_map[train_model.M] = masks
@@ -227,7 +228,7 @@ class Runner(AbstractEnvRunner):
             # Given observations, get action value and neglopacs
             # We already have self.obs because Runner superclass run self.obs[:] = env.reset() on init
             actions, values, self.states, neglogpacs = self.model.step(
-                self.obs, S=self.states, M=self.dones)
+                self.obs, S=self.states, M=self.dones, inds=np.arange(self.nenv))
             mb_obs.append(self.obs.copy())
             mb_actions.append(actions)
             mb_values.append(values)
@@ -450,7 +451,7 @@ def learn(*,
                               for arr in (obs, returns, masks, actions, values,
                                           neglogpacs))
                     mblossvals.append(
-                        model.train(lrnow, cliprangenow, *slices))
+                        model.train(mbinds, lrnow, cliprangenow, *slices))
         else:  # recurrent version
             assert nenvs % nminibatches == 0
             envsperbatch = nenvs // nminibatches
