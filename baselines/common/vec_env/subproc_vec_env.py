@@ -29,8 +29,6 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 break
             elif cmd == 'get_spaces':
                 remote.send((env.observation_space, env.action_space))
-            elif cmd == 'set_reward_params':
-                env.set_reward_params(data)
             else:
                 raise NotImplementedError
     except KeyboardInterrupt:

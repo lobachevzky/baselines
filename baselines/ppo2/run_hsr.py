@@ -20,8 +20,9 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
-from baselines.ppo2.hsr_wrapper import (HSREnv, Observation, UnsupervisedDummyVecEnv, UnsupervisedEnv,
-                                        UnsupervisedSubprocVecEnv)
+from baselines.ppo2.hsr_wrapper import (
+    HSREnv, Observation, UnsupervisedDummyVecEnv, UnsupervisedEnv,
+    UnsupervisedSubprocVecEnv)
 from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, parse_activation, parse_groups
 
 
@@ -32,16 +33,23 @@ def parse_lr(string: str) -> callable:
 class RewardStructure:
     def __init__(self, nenv: int, subspace_sizes: Iterable):
         self.subspace_sizes = subspace_sizes
-        param_shape = [Observation(*subspace_sizes).achieved]
+        param_shape = [Observation(*subspace_sizes).params]
         with tf.variable_scope('reward'):
-            self.params = tf.get_variable(
-                'params', shape=(nenv,) + param_shape)
+            self.params = tf.get_variable('params', shape=[nenv] + param_shape)
 
-    def function(self, X: tf.Tensor, idxs: tf.Tensor):
-        achieved = Observation(
-            *tf.split(X, self.subspace_sizes, axis=1)).achieved
-        params = tf.gather(self.params, idxs)
-        return -tf.reduce_sum(tf.square(achieved - params))
+    def recover_observation(self, X: tf.Tensor) -> Observation:
+        return Observation(*tf.split(X, self.subspace_sizes, axis=1))
+
+    def function(self, X: tf.Tensor) -> tf.Tensor:
+        o = self.recover_observation(X)
+        return -tf.reduce_sum(tf.square(o.achieved - o.params))
+
+    def replace_params(self, X: tf.Tensor, params: tf.Tensor) -> tf.Tensor:
+        # TODO: Check that params variable matches observation.params
+        obs = self.recover_observation(X)
+        params = tf.Print(params, [params], message='variable params')
+        params = tf.Print(params, [obs.params], message='ph params')
+        return tf.concat(obs.replace(params=params), axis=1)
 
 
 @env_wrapper
@@ -51,12 +59,13 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
     if logdir:
         format_strs += ['tensorboard']
     logger.configure(format_strs=format_strs, dir=logdir)
-    ncpu = ncpu or multiprocessing.cpu_count()
+    ncpu = nenv = ncpu or multiprocessing.cpu_count()
     config = tf.ConfigProto(
         allow_soft_placement=True,
         intra_op_parallelism_threads=ncpu,
         inter_op_parallelism_threads=ncpu)
-    tf.Session(config=config).__enter__()
+    sess = tf.Session(config=config)
+    sess.__enter__()
 
     def make_env():
         _env = Monitor(
@@ -70,30 +79,28 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         sample_env = env(**env_args)
         assert isinstance(sample_env, UnsupervisedEnv)
         reward_structure = RewardStructure(
-            subspace_sizes=sample_env.subspace_sizes)
+            subspace_sizes=sample_env.subspace_sizes, nenv=nenv)
         if sys.platform == 'darwin':
             env = UnsupervisedDummyVecEnv(
-                [make_env], reward_params=reward_structure.params)
+                [make_env] * nenv, reward_params=reward_structure.params)
         else:
+            #TODO: switch to subprocvecenv
             env = UnsupervisedDummyVecEnv(
-                [make_env], reward_params=reward_structure.params)
-
-        def network(X: tf.Tensor):
-            nbatch = tf.shape(X)[0]
-            reward_params = tf.tile(
-                tf.expand_dims(reward_structure.params, axis=0), [nbatch, 1])
-            inputs = tf.concat([X, reward_params], axis=1)
-            return mlp(**network_args)(inputs)
+                [make_env] * nenv, reward_params=reward_structure.params)
 
         # TODO: make sure tf reward_function and np reward_function are doing the same
         # thing
+        # TODO: delete all non-ppo directories
+        # TODO: force timesteps to equal nsteps
+        # TODO: Is first reset sending wrong params?
+        # TODO: What's the deal with eval env? Can we use that to properly
+        # evaluate?
     else:
         reward_structure = None
         if sys.platform == 'darwin':
-            env = SubprocVecEnv([make_env for _ in range(ncpu)])
+            env = SubprocVecEnv([make_env] * nenv)
         else:
-            env = DummyVecEnv([make_env])
-        network = 'mlp'
+            env = DummyVecEnv([make_env] * nenv)
 
     env = VecNormalize(env)
 
@@ -101,7 +108,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
 
     model = ppo2.learn(
         reward_structure=reward_structure,
-        network=network,
+        network='mlp',
         env=env,
         total_timesteps=1e20,
         eval_env=env,

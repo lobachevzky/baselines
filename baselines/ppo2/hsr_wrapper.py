@@ -29,13 +29,21 @@ class HSREnv(hsr.HSREnv):
 
 
 StepData = namedtuple('StepData', 'actions reward_params')
-Observation = namedtuple('Observation', 'observation achieved')
+
+
+class Observation(namedtuple('Observation', 'observation achieved params')):
+    def replace(self, *args, **kwargs):
+        return self._replace(*args, **kwargs)
 
 
 class UnsupervisedEnv(hsr.HSREnv):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        spaces = Observation(*self.observation_space.spaces)
+        old_spaces = hsr.Observation(*self.observation_space.spaces)
+        spaces = Observation(
+            observation=old_spaces.observation,
+            params=old_spaces.goal,
+            achieved=old_spaces.goal)
 
         # subspace_sizes used for splitting concatenated tensor observations
         self.subspace_sizes = [space_shape(space)[0] for space in spaces]
@@ -45,16 +53,17 @@ class UnsupervisedEnv(hsr.HSREnv):
         # space of observation needs to exclude reward param
         self.observation_space = concat_spaces(spaces, axis=0)
 
-        self.reward_params = None
+        self.reward_params = spaces.params.sample()
         self.sess = get_session()
 
     def step(self, step_data: StepData):
         self.reward_params = step_data.reward_params
         s, r, t, i = super().step(step_data.actions)
-        return vectorize([s.observation, self.achieved_goal()]), r, t, i
+        return vectorize([s, self.achieved_goal()]), r, t, i
 
     def reset(self):
-        return vectorize([super().reset().observation, self.achieved_goal()])
+        o = super().reset()
+        return vectorize([o, self.achieved_goal()])
 
     def compute_reward(self):
         return -np.sum(np.square(self.reward_params - self.achieved_goal()))
@@ -69,9 +78,6 @@ class UnsupervisedEnv(hsr.HSREnv):
         print('new goal params', self.reward_params)
         return self.reward_params
 
-    def set_reward_params(self, reward_params):
-        self.reward_params = reward_params
-
 
 class UnsupervisedSubprocVecEnv(SubprocVecEnv):
     def __init__(self, env_fns, reward_params: tf.Tensor):
@@ -82,8 +88,8 @@ class UnsupervisedSubprocVecEnv(SubprocVecEnv):
     def step_async(self, actions):
         params = self.sess.run(self.params)
         super().step_async([
-            StepData(actions=action, reward_params=params)
-            for action in actions
+            StepData(actions=action, reward_params=params[i])
+            for i, action in enumerate(actions)
         ])
 
 
@@ -96,6 +102,6 @@ class UnsupervisedDummyVecEnv(DummyVecEnv):
     def step_async(self, actions):
         params = self.sess.run(self.params)
         super().step_async([
-            StepData(actions=action, reward_params=params)
-            for action in actions
+            StepData(actions=action, reward_params=params[i])
+            for i, action in enumerate(actions)
         ])

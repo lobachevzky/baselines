@@ -148,8 +148,11 @@ def build_policy(env,
         network_type = policy_network
         policy_network = get_network_builder(network_type)(**policy_kwargs)
 
-    def policy_fn(nbatch=None, nsteps=None, sess=None,
-                  observ_placeholder=None, reward_structure=None):
+    def policy_fn(nbatch=None,
+                  nsteps=None,
+                  sess=None,
+                  observ_placeholder=None,
+                  reward_structure=None):
         ob_space = env.observation_space
         # TODO: assign value of param in observation to reward_structure.params
         # TODO: replace params segment of observation with reward_structure.params
@@ -158,16 +161,18 @@ def build_policy(env,
             ob_space, batch_size=nbatch)
 
         extra_tensors = {}
-        if reward_structure:
-            idxs = tf.placeholder(tf.int32, [nbatch])
-            extra_tensors.update(idxs=idxs)
-            params = tf.gather(reward_structure.params, idxs)
 
         if normalize_observations and X.dtype == tf.float32:
             encoded_x, rms = _normalize_clip_observation(X)
-            extra_tensors['rms'] = rms
+            extra_tensors.update(rms=rms)
         else:
             encoded_x = X
+
+        if reward_structure:
+            idxs = tf.placeholder(tf.int32, [nbatch], name='idxs')
+            extra_tensors.update(idxs=idxs)
+            params = tf.gather(reward_structure.params, idxs)
+            encoded_x = reward_structure.replace_params(encoded_x, params)
 
         encoded_x = encode_observation(ob_space, encoded_x)
 

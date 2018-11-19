@@ -39,17 +39,27 @@ class Model(object):
     - Save load the model
     """
 
-    def __init__(self, *, policy, reward_structure, ob_space, ac_space, nbatch_act,
-                                              nbatch_train,
-                 nsteps, ent_coef, vf_coef, max_grad_norm):
+    def __init__(self, *, policy, reward_structure, ob_space, ac_space,
+                 nbatch_act, nbatch_train, nsteps, ent_coef, vf_coef,
+                 max_grad_norm):
         sess = get_session()
         with tf.variable_scope('ppo2_model', reuse=tf.AUTO_REUSE):
             # CREATE OUR TWO MODELS
             # act_model that is used for sampling
-            act_model = policy(nbatch_act, 1, sess, reward_structure)
+            act_model = policy(
+                nbatch_act,
+                1,
+                sess,
+                reward_structure=reward_structure,
+            )
 
             # Train model for training
-            train_model = policy(nbatch_train, nsteps, sess, reward_structure)
+            train_model = policy(
+                nbatch_train,
+                nsteps,
+                sess,
+                reward_structure=reward_structure,
+            )
 
         # CREATE THE PLACEHOLDERS
         A = train_model.pdtype.sample_placeholder([None])
@@ -57,7 +67,7 @@ class Model(object):
         if reward_structure is None:
             R = tf.placeholder(tf.float32, [None])
         else:
-            R = reward_structure.function(train_model.X, IDX)
+            R = reward_structure.function(train_model.X)
         # Keep track of old actor
         OLDNEGLOGPAC = tf.placeholder(tf.float32, [None])
         # Keep track of old critic
@@ -144,13 +154,13 @@ class Model(object):
 
         def train(lr,
                   cliprange,
+                  env_idxs,
                   obs,
                   returns,
                   masks,
                   actions,
                   values,
                   neglogpacs,
-                  mbinds,
                   states=None):
             # Here we calculate advantage A(s,a) = R + yV(s') - V(s)
             # Returns = R + yV(s')
@@ -170,7 +180,7 @@ class Model(object):
             }
             if reward_structure:
                 del td_map[R]
-                td_map[train_model.idxs] = mbinds
+                td_map[train_model.idxs] = env_idxs
             if states is not None:
                 td_map[train_model.S] = states
                 td_map[train_model.M] = masks
@@ -223,12 +233,13 @@ class Runner(AbstractEnvRunner):
         mb_obs, mb_rewards, mb_actions, mb_values, mb_dones, mb_neglogpacs = [], [], [], [], [], []
         mb_states = self.states
         epinfos = []
+        idxs = np.arange(self.nenv)
         # For n in range number of steps
         for _ in range(self.nsteps):
             # Given observations, get action value and neglopacs
             # We already have self.obs because Runner superclass run self.obs[:] = env.reset() on init
             actions, values, self.states, neglogpacs = self.model.step(
-                self.obs, S=self.states, M=self.dones, inds=np.arange(self.nenv))
+                self.obs, S=self.states, M=self.dones, idxs=idxs)
             mb_obs.append(self.obs.copy())
             mb_actions.append(actions)
             mb_values.append(values)
@@ -249,8 +260,8 @@ class Runner(AbstractEnvRunner):
         mb_values = np.asarray(mb_values, dtype=np.float32)
         mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
         mb_dones = np.asarray(mb_dones, dtype=np.bool)
-        last_values = self.model.value(self.obs, S=self.states, M=self.dones)
-
+        last_values = self.model.value(
+            self.obs, S=self.states, M=self.dones, idxs=idxs)
         # discount/bootstrap off value fn
         mb_returns = np.zeros_like(mb_rewards)
         mb_advs = np.zeros_like(mb_rewards)
@@ -267,7 +278,8 @@ class Runner(AbstractEnvRunner):
             mb_advs[
                 t] = lastgaelam = delta + self.gamma * self.lam * nextnonterminal * lastgaelam
         mb_returns = mb_advs + mb_values
-        return (*map(sf01, (mb_obs, mb_returns, mb_dones, mb_actions,
+        idxs = np.tile(idxs, (self.nsteps, 1))
+        return (*map(sf01, (idxs, mb_obs, mb_returns, mb_dones, mb_actions,
                             mb_values, mb_neglogpacs)), mb_states, epinfos)
 
 
@@ -422,10 +434,10 @@ def learn(*,
         # Calculate the cliprange
         cliprangenow = cliprange(frac)
         # Get minibatch
-        obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run(
-        )  # pylint: disable=E0632
+        idxs, obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run(
+        )
         if eval_env is not None:
-            eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run(
+            _, eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run(
             )  # pylint: disable=E0632
 
         epinfobuf.extend(epinfos)
@@ -433,8 +445,6 @@ def learn(*,
             eval_epinfobuf.extend(eval_epinfos)
 
         # Here what we're going to do is for each minibatch calculate the loss and append it.
-
-        import ipdb; ipdb.set_trace()
         mblossvals = []
         if states is None:  # nonrecurrent version
             # Index of each element of batch_size
@@ -448,10 +458,10 @@ def learn(*,
                     end = start + nbatch_train
                     mbinds = inds[start:end]
                     slices = (arr[mbinds]
-                              for arr in (obs, returns, masks, actions, values,
-                                          neglogpacs))
+                              for arr in (idxs, obs, returns, masks, actions,
+                                          values, neglogpacs))
                     mblossvals.append(
-                        model.train(mbinds, lrnow, cliprangenow, *slices))
+                        model.train(lrnow, cliprangenow, *slices))
         else:  # recurrent version
             assert nenvs % nminibatches == 0
             envsperbatch = nenvs // nminibatches
