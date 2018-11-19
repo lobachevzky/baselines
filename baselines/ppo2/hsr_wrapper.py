@@ -53,17 +53,35 @@ class UnsupervisedEnv(hsr.HSREnv):
         # space of observation needs to exclude reward param
         self.observation_space = concat_spaces(spaces, axis=0)
 
-        self.reward_params = spaces.params.sample()
+        # self.reward_params = self.achieved_goal()
+        self.reward_params = 7 * np.ones(3)
         self.sess = get_session()
 
     def step(self, step_data: StepData):
         self.reward_params = step_data.reward_params
         s, r, t, i = super().step(step_data.actions)
-        return vectorize([s, self.achieved_goal()]), r, t, i
+        print('step')
+        print('self.goal', self.goal)
+        print('s.goal', s.goal)
+        import ipdb
+        ipdb.set_trace()
+        return vectorize(
+            Observation(
+                observation=s.observation,
+                params=s.goal,
+                achieved=self.achieved_goal())), r, t, i
 
     def reset(self):
         o = super().reset()
-        return vectorize([o, self.achieved_goal()])
+        print('reset')
+        print('o', o)
+        import ipdb
+        ipdb.set_trace()
+        return vectorize(
+            Observation(
+                observation=o.observation,
+                params=o.goal,
+                achieved=self.achieved_goal()))
 
     def compute_reward(self):
         return -np.sum(np.square(self.reward_params - self.achieved_goal()))

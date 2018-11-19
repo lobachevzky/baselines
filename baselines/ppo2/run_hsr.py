@@ -31,11 +31,22 @@ def parse_lr(string: str) -> callable:
 
 
 class RewardStructure:
-    def __init__(self, nenv: int, subspace_sizes: Iterable):
+    def __init__(
+            self,
+            nenv: int,
+            params: np.array,
+            subspace_sizes: Iterable,
+    ):
         self.subspace_sizes = subspace_sizes
-        param_shape = [Observation(*subspace_sizes).params]
+        param_shape = (Observation(*subspace_sizes).params, )
+        assert np.shape(params) == param_shape
         with tf.variable_scope('reward'):
-            self.params = tf.get_variable('params', shape=[nenv] + param_shape)
+            self.params = tf.get_variable(
+                'params',
+                (nenv, ) + param_shape,
+                initializer=tf.constant_initializer(
+                    np.tile(params, (nenv, 1))),
+            )
 
     def recover_observation(self, X: tf.Tensor) -> Observation:
         return Observation(*tf.split(X, self.subspace_sizes, axis=1))
@@ -79,7 +90,10 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         sample_env = env(**env_args)
         assert isinstance(sample_env, UnsupervisedEnv)
         reward_structure = RewardStructure(
-            subspace_sizes=sample_env.subspace_sizes, nenv=nenv)
+            subspace_sizes=sample_env.subspace_sizes,
+            params=sample_env.reward_params,
+            nenv=nenv,
+        )
         if sys.platform == 'darwin':
             env = UnsupervisedDummyVecEnv(
                 [make_env] * nenv, reward_params=reward_structure.params)
@@ -90,8 +104,6 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
 
         # TODO: make sure tf reward_function and np reward_function are doing the same
         # thing
-        # TODO: delete all non-ppo directories
-        # TODO: force timesteps to equal nsteps
         # TODO: Is first reset sending wrong params?
         # TODO: What's the deal with eval env? Can we use that to properly
         # evaluate?
@@ -102,7 +114,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         else:
             env = DummyVecEnv([make_env] * nenv)
 
-    env = VecNormalize(env)
+    # env = VecNormalize(env)
 
     set_global_seeds(seed)
 
@@ -110,8 +122,9 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         reward_structure=reward_structure,
         network='mlp',
         env=env,
+        nsteps=max_steps,
         total_timesteps=1e20,
-        eval_env=env,
+        eval_env=None,
         **kwargs)
 
     # Run trained model
@@ -158,7 +171,6 @@ def cli():
     parser.add_argument('--logdir', type=str, default=None)
     parser.add_argument('--seed', type=int, required=True)
     parser.add_argument('--max-grad-norm', type=float, required=True)
-    parser.add_argument('--nsteps', type=int)
     parser.add_argument('--nminibatches', type=int)
     parser.add_argument('--lam', type=float)
     parser.add_argument('--gamma', type=float)
@@ -168,6 +180,7 @@ def cli():
     parser.add_argument('--lr', type=parse_lr)
     parser.add_argument('--cliprange', type=float)
     parser.add_argument('--value-network')
+    parser.add_argument('--normalize-observations', action='store_true')
     parser.set_defaults(**mujoco())
 
     main(**(parse_groups(parser)))
