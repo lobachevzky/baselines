@@ -8,9 +8,8 @@ import os
 import tempfile
 
 # third party
-import gym
-
 # first party
+import gym
 import pytest
 
 # local

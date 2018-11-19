@@ -1,8 +1,9 @@
 # first party
+import pytest
+
 from baselines.common.tests.envs.fixed_sequence_env import FixedSequenceEnv
 from baselines.common.tests.util import simple_test
 from baselines.run import get_learn_function
-import pytest
 
 common_kwargs = dict(
     seed=0,

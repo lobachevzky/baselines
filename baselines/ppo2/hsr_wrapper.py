@@ -1,16 +1,15 @@
 # third party
 from collections import namedtuple
 
-from environments import hsr
 import numpy as np
-from sac.utils import concat_spaces, space_shape, unwrap_env, vectorize
 import tensorflow as tf
 
 # first party
 from baselines.common.tf_util import get_session
-from baselines.common.vec_env import VecEnv
 from baselines.common.vec_env.dummy_vec_env import DummyVecEnv
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
+from environments import hsr
+from sac.utils import concat_spaces, space_shape, vectorize
 
 
 class HSREnv(hsr.HSREnv):

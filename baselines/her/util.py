@@ -10,7 +10,6 @@ import sys
 import numpy as np
 import tensorflow as tf
 
-# first party
 from baselines.common import tf_util as U
 
 

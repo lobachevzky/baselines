@@ -1,8 +1,9 @@
 # first party
+import pytest
+
 from baselines.common.tests.envs.identity_env import BoxIdentityEnv, DiscreteIdentityEnv, MultiDiscreteIdentityEnv
 from baselines.common.tests.util import simple_test
 from baselines.run import get_learn_function
-import pytest
 
 common_kwargs = dict(
     total_timesteps=30000,

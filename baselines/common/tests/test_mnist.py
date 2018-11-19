@@ -1,9 +1,10 @@
 # from baselines.acer import acer_simple as acer
 # first party
+import pytest
+
 from baselines.common.tests.envs.mnist_env import MnistEnv
 from baselines.common.tests.util import simple_test
 from baselines.run import get_learn_function
-import pytest
 
 # TODO investigate a2c and ppo2 failures - is it due to bad hyperparameters for this problem?
 # GitHub issue https://github.com/openai/baselines/issues/189

@@ -1,15 +1,12 @@
 #!/usr/bin/env python3
 # stdlib
+# third party
 import argparse
 import multiprocessing
-
-# third party
 import sys
 
 from gym.wrappers import TimeLimit
 import numpy as np
-from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, \
-    parse_activation, parse_groups
 import tensorflow as tf
 
 # first party
@@ -22,8 +19,9 @@ from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.common.vec_env.vec_normalize import VecNormalize
 from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
-from baselines.ppo2.hsr_wrapper import HSREnv, UnsupervisedDummyVecEnv, UnsupervisedEnv, \
-    UnsupervisedSubprocVecEnv, Observation
+from baselines.ppo2.hsr_wrapper import (HSREnv, Observation, UnsupervisedDummyVecEnv, UnsupervisedEnv,
+                                        UnsupervisedSubprocVecEnv)
+from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, parse_activation, parse_groups
 
 
 def parse_lr(string: str) -> callable:
@@ -72,11 +70,11 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         reward_structure = RewardStructure(
             subspace_sizes=sample_env.subspace_sizes)
         if sys.platform == 'darwin':
-            env = UnsupervisedDummyVecEnv([make_env],
-                                          reward_params=reward_structure.params)
+            env = UnsupervisedDummyVecEnv(
+                [make_env], reward_params=reward_structure.params)
         elif sys.platform == 'linux':
-            env = UnsupervisedDummyVecEnv([make_env],
-                                          reward_params=reward_structure.params)
+            env = UnsupervisedDummyVecEnv(
+                [make_env], reward_params=reward_structure.params)
 
         def network(X: tf.Tensor):
             nbatch = tf.shape(X)[0]
@@ -109,7 +107,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
 
     # Run trained model
     logger.log("Running trained model")
-    obs = np.zeros((1,) + env.observation_space.shape)
+    obs = np.zeros((1, ) + env.observation_space.shape)
     obs[:] = env.reset()
     while True:
         actions = model.step(obs)[0]

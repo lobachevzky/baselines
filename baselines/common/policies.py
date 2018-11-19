@@ -10,7 +10,6 @@ from baselines.common.input import encode_observation, observation_placeholder
 from baselines.common.models import get_network_builder
 from baselines.common.mpi_running_mean_std import RunningMeanStd
 from baselines.common.tf_util import adjust_shape
-from baselines.ppo2.hsr_wrapper import UnsupervisedDummyVecEnv, UnsupervisedEnv, UnsupervisedSubprocVecEnv
 
 
 class PolicyWithValue(object):

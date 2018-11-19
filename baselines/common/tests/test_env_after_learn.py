@@ -1,12 +1,12 @@
 # third party
 import gym
+import pytest
 import tensorflow as tf
 
 # first party
 from baselines.common.tf_util import make_session
 from baselines.common.vec_env.subproc_vec_env import SubprocVecEnv
 from baselines.run import get_learn_function
-import pytest
 
 algos = ['a2c', 'acer', 'acktr', 'deepq', 'ppo2', 'trpo_mpi']
 
