@@ -22,7 +22,7 @@ from baselines.ppo2 import ppo2
 from baselines.ppo2.defaults import mujoco
 from baselines.ppo2.hsr_wrapper import (
     HSREnv, Observation, UnsupervisedDummyVecEnv, UnsupervisedEnv,
-    UnsupervisedSubprocVecEnv)
+    UnsupervisedSubprocVecEnv, MoveGripperEnv)
 from scripts.hsr import ACTIVATIONS, add_env_args, add_wrapper_args, env_wrapper, parse_activation, parse_groups
 
 
@@ -98,9 +98,9 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
     else:
         reward_structure = None
         if sys.platform == 'darwin':
-            env = SubprocVecEnv([make_env] * nenv)
-        else:
             env = DummyVecEnv([make_env] * nenv)
+        else:
+            env = SubprocVecEnv([make_env] * nenv)
 
     env = VecNormalize(env)
 
