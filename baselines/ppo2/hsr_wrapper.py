@@ -28,6 +28,9 @@ class HSREnv(hsr.HSREnv):
         return vectorize(super().reset())
 
 
+class MoveGripperEnv(hsr.HSREnv, hsr.MoveGripperEnv):
+    pass
+
 StepData = namedtuple('StepData', 'actions reward_params')
 
 

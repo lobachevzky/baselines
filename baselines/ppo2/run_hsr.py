@@ -126,6 +126,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
 
 ENVIRONMENTS = dict(
     move_block=HSREnv,
+    move_gripper=MoveGripperEnv,
     unsupervised=UnsupervisedEnv,
 )
 
