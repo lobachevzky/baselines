@@ -65,8 +65,9 @@ class RewardStructure:
 
 
 @env_wrapper
-def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
-         **kwargs):
+def main(max_steps, nsteps, seed, logdir, env, ncpu, goal_lr, env_args,
+         network_args, **kwargs):
+    nsteps = nsteps or max_steps
     format_strs = ['stdout']
     if logdir:
         format_strs += ['tensorboard']
@@ -123,7 +124,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         reward_structure=reward_structure,
         network='mlp',
         env=env,
-        nsteps=max_steps,
+        nsteps=nsteps,
         total_timesteps=1e20,
         eval_env=None,
         **kwargs)
@@ -168,6 +169,7 @@ def cli():
         type=lambda k: ENVIRONMENTS[k],
         default=HSREnv)
     parser.add_argument('--max-steps', type=int, required=True)
+    parser.add_argument('--nsteps', type=int, default=None)
     parser.add_argument('--ncpu', type=int)
     parser.add_argument('--goal-lr', type=eval)
     parser.add_argument('--logdir', type=str, default=None)
