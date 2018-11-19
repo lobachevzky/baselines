@@ -55,8 +55,6 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         inter_op_parallelism_threads=ncpu)
     tf.Session(config=config).__enter__()
 
-    sample_env = env(**env_args)
-
     def make_env():
         _env = Monitor(
             TimeLimit(max_episode_steps=max_steps, env=env(**env_args)),
@@ -66,13 +64,14 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         return _env
 
     if env is UnsupervisedEnv:
+        sample_env = env(**env_args)
         assert isinstance(sample_env, UnsupervisedEnv)
         reward_structure = RewardStructure(
             subspace_sizes=sample_env.subspace_sizes)
         if sys.platform == 'darwin':
             env = UnsupervisedDummyVecEnv(
                 [make_env], reward_params=reward_structure.params)
-        elif sys.platform == 'linux':
+        else:
             env = UnsupervisedDummyVecEnv(
                 [make_env], reward_params=reward_structure.params)
 
@@ -89,7 +88,7 @@ def main(max_steps, seed, logdir, env, ncpu, goal_lr, env_args, network_args,
         reward_structure = None
         if sys.platform == 'darwin':
             env = SubprocVecEnv([make_env for _ in range(ncpu)])
-        elif sys.platform == 'linux':
+        else:
             env = DummyVecEnv([make_env])
         network = 'mlp'
 

@@ -39,7 +39,7 @@ class Model(object):
     - Save load the model
     """
 
-    def __init__(self, *, policy, reward_structure, ob_space, ac_space, nbatch_act, \
+    def __init__(self, *, policy, reward_structure, ob_space, ac_space, nbatch_act,
                                               nbatch_train,
                  nsteps, ent_coef, vf_coef, max_grad_norm):
         sess = get_session()
@@ -432,6 +432,8 @@ def learn(*,
             eval_epinfobuf.extend(eval_epinfos)
 
         # Here what we're going to do is for each minibatch calculate the loss and append it.
+
+        import ipdb; ipdb.set_trace()
         mblossvals = []
         if states is None:  # nonrecurrent version
             # Index of each element of batch_size

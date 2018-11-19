@@ -145,9 +145,8 @@ def build_policy(env,
                   observ_placeholder=None):
         ob_space = env.observation_space
 
-        X = observ_placeholder if observ_placeholder is not None else \
-            observation_placeholder(
-            ob_space, batch_size=nbatch)
+        X = observ_placeholder or observation_placeholder(
+                ob_space, batch_size=nbatch)
 
         extra_tensors = {}
 
